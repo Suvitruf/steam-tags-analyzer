@@ -3,19 +3,19 @@ import path from 'path';
 import { readFileSync } from 'node:fs';
 
 const steamPromoPath = path.resolve(__dirname, '../_includes/steam-promo.html');
-const githubLinkPath = path.resolve(__dirname, '../_includes/github-link.html');
-const sharedIncludePaths = [steamPromoPath, githubLinkPath];
+const socialLinksPath = path.resolve(__dirname, '../_includes/social-links.html');
+const sharedIncludePaths = [steamPromoPath, socialLinksPath];
 
 export default defineConfig(({ command }) => ({
   root: path.resolve(__dirname),
   plugins: [{
     name: 'shared-site-includes',
     apply: 'serve',
-    // Use the same promotion and repository link as Jekyll on every dev page.
+    // Use the same promotion and social links as Jekyll on every dev page.
     transformIndexHtml(html) {
       return html
         .replace(/<body\b[^>]*>/i, body => `${body}\n${readFileSync(steamPromoPath, 'utf8')}`)
-        .replace('<nav class="site-nav">', nav => `${readFileSync(githubLinkPath, 'utf8')}\n${nav}`);
+        .replace('<nav class="site-nav">', nav => `${readFileSync(socialLinksPath, 'utf8')}\n${nav}`);
     },
     configureServer(server) {
       server.watcher.add(sharedIncludePaths);

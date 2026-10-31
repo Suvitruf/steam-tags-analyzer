@@ -62,7 +62,7 @@ body {
 }
 
 .site-title {
-  flex: 1;
+  flex: 1 1 200px;
   min-width: 0;
   color: var(--color-text-bright);
   text-decoration: none;
@@ -70,24 +70,32 @@ body {
   font-weight: bold;
 }
 
-.github-link {
+.social-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.social-link {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
   gap: 8px;
   min-height: 44px;
+  min-width: 44px;
   padding: 4px 8px;
   border-radius: var(--radius);
   color: var(--color-accent);
   text-decoration: none;
 }
 
-.github-link:hover {
+.social-link:hover {
   color: var(--color-text-bright);
   background: var(--color-surface-light);
 }
 
-.github-link:focus-visible {
+.social-link:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 3px;
 }
