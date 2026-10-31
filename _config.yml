@@ -1,0 +1,23 @@
+title: "Steam Tag Analyzer"
+description: "Find commercially useful accurate Steam tags and research comparable games"
+baseurl: "/steam-tags-analyzer"
+url: "https://suvitruf.github.io"
+theme: minima
+plugins:
+  - jekyll-seo-tag
+exclude:
+  - sources/
+  - tools/
+  - node_modules/
+  - vendor/
+  - tsconfig*.json
+  - package*.json
+  - Gemfile*
+  - README.md
+  - LICENSE
+  - .github/
+  - .env*
+  - assets/models/
+  - assets/data/
+  - test-results/
+  - playwright-report/

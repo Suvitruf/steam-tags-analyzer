@@ -1,0 +1,108 @@
+name: Publish monthly database
+
+on:
+  schedule:
+    - cron: '17 12 1 * *' # First day of each month, 12:17 UTC; after the daily refresh.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: monthly-database-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      DATABASE_URL: https://projects.cdn.aapanasik.com/steam-tags/steam-tags-working.db
+    steps:
+      - name: Check this month's release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="data-$(date -u +%Y-%m)"
+          directory="$RUNNER_TEMP/steam-tags-database"
+          mkdir -p "$directory"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "SNAPSHOT_DIR=$directory" >> "$GITHUB_ENV"
+          # Listing with authentication includes unfinished drafts as well as published releases.
+          # API errors fail the job instead of being treated as an absent release.
+          state=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"$tag\") | if .draft then \"draft\" else \"published\" end")
+          case "$state" in
+            '') state=absent ;;
+            draft|published) ;;
+            *) echo "::error::Unexpected release state: $state"; exit 1 ;;
+          esac
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          if [[ "$state" == published ]]; then
+            echo "Release $tag is already published; keeping its original snapshot." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.release.outputs.state != 'published'
+        with:
+          persist-credentials: false
+
+      - name: Test snapshot packaging
+        if: steps.release.outputs.state != 'published'
+        run: python3 -m unittest discover -s tools/tests -v
+
+      - name: Download the full database
+        if: steps.release.outputs.state != 'published'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --retry 3 --retry-all-errors \
+            --retry-delay 15 --connect-timeout 30 --max-time 900 \
+            --header 'Cache-Control: no-cache' \
+            --dump-header "$SNAPSHOT_DIR/source-headers.txt" \
+            --output "$SNAPSHOT_DIR/steam-tags-working.db.part" "$DATABASE_URL"
+          mv "$SNAPSHOT_DIR/steam-tags-working.db.part" "$SNAPSHOT_DIR/steam-tags-working.db"
+
+      - name: Validate and package the snapshot
+        if: steps.release.outputs.state != 'published'
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          python3 tools/prepare-database-release.py \
+            --database "$SNAPSHOT_DIR/steam-tags-working.db" \
+            --headers "$SNAPSHOT_DIR/source-headers.txt" \
+            --source-url "$DATABASE_URL" \
+            --tag "$RELEASE_TAG" \
+            --output "$SNAPSHOT_DIR/release"
+
+      - name: Upload all assets, then publish
+        if: steps.release.outputs.state != 'published'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_STATE: ${{ steps.release.outputs.state }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          directory="$SNAPSHOT_DIR/release"
+          title="Steam database — ${RELEASE_TAG#data-}"
+          if [[ "$RELEASE_STATE" == absent ]]; then
+            gh release create "$RELEASE_TAG" --draft --target "$GITHUB_SHA" \
+              --title "$title" --notes-file "$directory/release-notes.md" --latest=false
+          fi
+          # Only drafts reach this step. A failed upload stays unpublished and can be retried.
+          gh release upload "$RELEASE_TAG" \
+            "$directory/steam-tags-working.db.gz" \
+            "$directory/metadata.json" \
+            "$directory/SHA256SUMS" --clobber
+          gh release edit "$RELEASE_TAG" --draft=false --latest=false \
+            --title "$title" --notes-file "$directory/release-notes.md"
+          printf 'Published [%s](%s/%s/releases/tag/%s).\n' \
+            "$RELEASE_TAG" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"

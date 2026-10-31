@@ -1,0 +1,33 @@
+node_modules/
+_site/
+.jekyll-cache/
+.sass-cache/
+.bundle/
+vendor/
+assets/js/
+sources/dist/
+*.log
+.env*
+.DS_Store
+.idea/
+.vscode/
+test-results/
+playwright-report/
+# Runtime data and trained weights are hosted separately.
+assets/data/
+assets/models/
+*.db
+*.db-wal
+*.db-shm
+*.onnx
+*.onnx.data
+# Assistant-specific files are not part of this public client.
+AGENTS.md
+CLAUDE.md
+.agents/
+.claude/
+.codex/
+
+# Python release-packaging tools.
+__pycache__/
+*.py[cod]
