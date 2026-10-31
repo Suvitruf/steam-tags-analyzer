@@ -3,20 +3,24 @@ import path from 'path';
 import { readFileSync } from 'node:fs';
 
 const steamPromoPath = path.resolve(__dirname, '../_includes/steam-promo.html');
+const githubLinkPath = path.resolve(__dirname, '../_includes/github-link.html');
+const sharedIncludePaths = [steamPromoPath, githubLinkPath];
 
 export default defineConfig(({ command }) => ({
   root: path.resolve(__dirname),
   plugins: [{
-    name: 'shared-steam-promo',
+    name: 'shared-site-includes',
     apply: 'serve',
-    // Use the same widget markup as Jekyll on every development page.
+    // Use the same promotion and repository link as Jekyll on every dev page.
     transformIndexHtml(html) {
-      return html.replace(/<body\b[^>]*>/i, body => `${body}\n${readFileSync(steamPromoPath, 'utf8')}`);
+      return html
+        .replace(/<body\b[^>]*>/i, body => `${body}\n${readFileSync(steamPromoPath, 'utf8')}`)
+        .replace('<nav class="site-nav">', nav => `${readFileSync(githubLinkPath, 'utf8')}\n${nav}`);
     },
     configureServer(server) {
-      server.watcher.add(steamPromoPath);
+      server.watcher.add(sharedIncludePaths);
       server.watcher.on('change', file => {
-        if (path.resolve(file) === steamPromoPath) server.ws.send({ type: 'full-reload' });
+        if (sharedIncludePaths.includes(path.resolve(file))) server.ws.send({ type: 'full-reload' });
       });
     },
   }],
