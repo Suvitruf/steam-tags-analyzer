@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve('_site');
-const base = (process.env.SITE_BASE_PATH ?? '/steam-tags-analyzer').replace(/\/$/, '');
+const base = (process.env.SITE_BASE_PATH ?? '').replace(/\/$/, '');
 const routes = [
   '', 'analyzer', 'audit', 'tags', 'benchmarks', 'compare', 'lifecycle',
   'features', 'prices', 'combos', 'map', 'timing', 'trends', 'trending',

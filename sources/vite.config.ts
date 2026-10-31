@@ -21,8 +21,8 @@ export default defineConfig(({ command }) => ({
     },
   }],
   // Relative asset URLs, so emitted references (the embed-worker chunk, the
-  // sql.js wasm) resolve wherever the bundle is mounted — the Jekyll site
-  // serves it under baseurl /steam-tags-analyzer, where absolute '/assets/...' 404s.
+  // sql.js wasm) resolve both at the custom domain root and under a Jekyll
+  // baseurl when the site is mounted at a subpath.
   base: './',
   // Dev server: serve ../assets at / so index.html's /css/style.css resolves
   // (nothing is copied in serve mode). Build: publicDir OFF — the heavy

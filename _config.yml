@@ -1,7 +1,7 @@
 title: "Steam Tag Analyzer"
 description: "Find commercially useful accurate Steam tags and research comparable games"
-baseurl: "/steam-tags-analyzer"
-url: "https://suvitruf.github.io"
+baseurl: ""
+url: "https://steam-tags-analyzer.apanasik.com"
 theme: minima
 plugins:
   - jekyll-seo-tag

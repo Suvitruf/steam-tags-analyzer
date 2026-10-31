@@ -1,7 +1,7 @@
 # Steam Tag Analyzer
 
 [![Build and deploy Pages](https://github.com/Suvitruf/steam-tags-analyzer/actions/workflows/pages.yml/badge.svg)](https://github.com/Suvitruf/steam-tags-analyzer/actions/workflows/pages.yml)
-[Website](https://suvitruf.github.io/steam-tags-analyzer/) · [Report an issue](https://github.com/Suvitruf/steam-tags-analyzer/issues)
+[Website](https://steam-tags-analyzer.apanasik.com/) · [Report an issue](https://github.com/Suvitruf/steam-tags-analyzer/issues)
 
 > Developed while working on [Pocket Cat Desktop](https://store.steampowered.com/app/4865920/Pocket_Cat_Desktop/?utm_source=github&utm_medium=web&utm_campaign=steam_tags_analyzer&utm_content=suvitruf), this tool grew out of the experimental project to analyze market and Steam.
 
