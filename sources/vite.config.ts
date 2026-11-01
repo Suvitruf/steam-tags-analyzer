@@ -6,7 +6,13 @@ import { tagIdFromPath } from './lib/tag-route.mjs';
 const steamPromoPath = path.resolve(__dirname, '../_includes/steam-promo.html');
 const socialLinksPath = path.resolve(__dirname, '../_includes/social-links.html');
 const siteNavPath = path.resolve(__dirname, '../_includes/site-nav.html');
-const sharedIncludePaths = [steamPromoPath, socialLinksPath, siteNavPath];
+const faviconsPath = path.resolve(__dirname, '../_includes/favicons.html');
+const sharedIncludePaths = [steamPromoPath, socialLinksPath, siteNavPath, faviconsPath];
+
+function devFavicons(): string {
+  // Vite serves assets/ at the root, while Jekyll includes the site prefix.
+  return readFileSync(faviconsPath, 'utf8').replace(/\{\{\s*'(\/assets\/[^']+)'\s*\|\s*relative_url\s*\}\}/g, (_match, asset: string) => asset.slice('/assets'.length));
+}
 
 function devNavigation(): string {
   // Jekyll and Vite share the page list; only the development URLs differ.
@@ -21,9 +27,10 @@ export default defineConfig(({ command }) => ({
   plugins: [{
     name: 'shared-site-includes',
     apply: 'serve',
-    // Use the same navigation, promotion and social links on every dev page.
+    // Use the same icons, navigation, promotion and social links on every dev page.
     transformIndexHtml(html) {
       return html
+        .replace('</head>', () => `${devFavicons()}\n</head>`)
         .replace(/<body\b[^>]*>/i, body => `${body}\n${readFileSync(steamPromoPath, 'utf8')}`)
         .replace(/<nav\b[^>]*class="site-nav"[^>]*>[\s\S]*?<\/nav>/, () => `${readFileSync(socialLinksPath, 'utf8')}\n${devNavigation()}`);
     },
