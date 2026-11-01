@@ -11,10 +11,14 @@ const routes = [
 const errors = [];
 const exists = file => fs.existsSync(file) && fs.statSync(file).isFile();
 
+const routeCache = new Map();
 function resolveRoute(relative) {
+  if (routeCache.has(relative)) return routeCache.get(relative);
   const file = path.resolve(root, relative || '.');
   if (file !== root && !file.startsWith(root + path.sep)) return null;
-  return [file, file + '.html', path.join(file, 'index.html')].find(exists) ?? null;
+  const result = [file, file + '.html', path.join(file, 'index.html')].find(exists) ?? null;
+  routeCache.set(relative, result);
+  return result;
 }
 
 for (const route of routes) {

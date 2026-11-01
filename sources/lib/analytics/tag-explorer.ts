@@ -3,6 +3,8 @@ import { getReviewThreshold } from './review-threshold';
 import { thresholdSummary, thresholdDetail, type ThresholdSummary, type ThresholdTag } from './threshold-data';
 import { columnChart, lineChart, SERIES_1, SERIES_2 } from './charts';
 import { el, fmtInt, fmtCompact, fmtPct, fmtLift, histBucketLabel } from './format';
+import { sitePagePath, tagPageUrl } from '../site-path';
+import { tagIdFromPath, tagIdFromHash } from '../tag-route.mjs';
 
 type SortKey = 'name' | 'count' | 'releases365' | 'medianReviews' | 'rate' | 'lift' | 'love';
 
@@ -29,8 +31,8 @@ function setBreadcrumb(tagName: string | null): void {
     crumb.textContent = crumb.dataset.baseTitle;
   } else {
     const back = el('a', undefined, crumb);
-    back.href = '#';
-    back.textContent = crumb.dataset.baseTitle;
+    back.href = sitePagePath('tags');
+    back.textContent = 'Tag Explorer';
     const sep = el('span', 'crumb-sep', crumb);
     sep.setAttribute('aria-hidden', 'true');
     sep.textContent = ' › ';
@@ -40,37 +42,51 @@ function setBreadcrumb(tagName: string | null): void {
 }
 
 export async function initTagExplorer(root: HTMLElement): Promise<void> {
-  root.textContent = 'Loading tag data…';
+  const prerendered = root.dataset.prerendered === 'true';
+  if (!prerendered) root.textContent = 'Loading tag data…';
   let summary: ThresholdSummary;
   try {
     summary = await thresholdSummary(await getTagsSummary(),getReviewThreshold());
   } catch (err) {
-    root.textContent = `Failed to load analytics data: ${(err as Error).message}`;
+    const message = `Interactive analytics could not load: ${(err as Error).message}`;
+    if (prerendered) el('p', 'coverage-warning', root).textContent = message;
+    else root.textContent = message;
     return;
   }
-  root.textContent = '';
-
-  const listView = el('div', 'tag-list-view', root);
-  const detailView = el('div', 'tag-detail-view', root);
-
-  buildList(listView, summary);
-
-  const route = () => {
-    const id = parseInt(location.hash.slice(1), 10);
+  const pathId = tagIdFromPath(location.pathname);
+  const legacyRedirect = () => {
+    if (pathId !== null) return false;
+    const id = tagIdFromHash(location.hash);
     const tag = summary.tags.find(t => t.id === id);
-    setBreadcrumb(tag?.name ?? null);
-    if (tag) {
-      listView.style.display = 'none';
-      detailView.style.display = '';
-      void renderDetail(detailView, tag, summary);
-      window.scrollTo(0, 0);
-    } else {
-      detailView.style.display = 'none';
-      listView.style.display = '';
-    }
+    if (!tag) return false;
+    const url = new URL(tagPageUrl(tag.id, tag.name), location.origin);
+    url.search = location.search;
+    location.replace(url.href);
+    return true;
   };
-  window.addEventListener('hashchange', route);
-  route();
+  if (legacyRedirect()) return;
+  if (pathId === null) {
+    window.addEventListener('hashchange', legacyRedirect);
+    root.replaceChildren();
+    buildList(el('div', 'tag-list-view', root), summary);
+    return;
+  }
+  const tag = summary.tags.find(t => t.id === pathId);
+  if (!tag) {
+    if (!prerendered) root.textContent = 'This tag is not available in this snapshot.';
+    return;
+  }
+  setBreadcrumb(tag.name);
+  if (import.meta.env.DEV) {
+    document.title = `${tag.name} Steam games: tag statistics`;
+    const heading = document.querySelector('main h1');
+    if (heading) heading.textContent = `${tag.name} Steam tag`;
+  }
+  // Keep the static statistics visible until all interactive inputs load.
+  const detailView = el('div', 'tag-detail-view');
+  if (await renderDetail(detailView, tag, summary)) root.replaceChildren(detailView);
+  else if (prerendered) el('p', 'coverage-warning', root).textContent = 'Interactive charts could not load. The static snapshot above is still available.';
+  else root.replaceChildren(detailView);
 }
 
 function buildList(view: HTMLElement, summary: ThresholdSummary): void {
@@ -131,7 +147,7 @@ function buildList(view: HTMLElement, summary: ThresholdSummary): void {
       const tr = el('tr', undefined, tbody);
       const nameCell = el('td', undefined, tr);
       const link = el('a', 'tag-link', nameCell);
-      link.href = `#${t.id}`;
+      link.href = tagPageUrl(t.id, t.name, threshold);
       link.textContent = t.name;
       const smallN = t.count < 30;
       if (smallN) tr.classList.add('is-small-sample');
@@ -161,13 +177,13 @@ function statTile(parent: Element, label: string, value: string, note?: string):
 // call may keep writing into the view after its awaits resolve.
 let renderSeq = 0;
 
-async function renderDetail(view: HTMLElement, tag: ThresholdTag, summary: ThresholdSummary): Promise<void> {
+async function renderDetail(view: HTMLElement, tag: ThresholdTag, summary: ThresholdSummary): Promise<boolean> {
   const threshold=summary.threshold;
   const seq = ++renderSeq;
   view.replaceChildren();
 
   const back = el('a', 'tag-back', view);
-  back.href = '#';
+  back.href = `${sitePagePath('tags')}?threshold=${threshold}`;
   back.textContent = '← All tags';
 
   const h = el('h2', 'tag-heading', view);
@@ -179,9 +195,9 @@ async function renderDetail(view: HTMLElement, tag: ThresholdTag, summary: Thres
     detail = await thresholdDetail(await getTagDetail(tag.id),getReviewThreshold());
   } catch (err) {
     view.lastElementChild!.textContent = `Failed to load tag data: ${(err as Error).message}`;
-    return;
+    return false;
   }
-  if (seq !== renderSeq) return; // a newer navigation superseded this render
+  if (seq !== renderSeq) return false; // a newer navigation superseded this render
   view.querySelector('.analytics-loading')?.remove();
 
   // stat tiles
@@ -292,7 +308,7 @@ async function renderDetail(view: HTMLElement, tag: ThresholdTag, summary: Thres
       const tr = el('tr', undefined, rtbody);
       const td = el('td', undefined, tr);
       const link = el('a', 'tag-link', td);
-      link.href = `#${r.id}`;
+      link.href = tagPageUrl(r.id, r.name, threshold);
       link.textContent = r.name;
       el('td', 'num', tr).textContent = fmtLift(r.lift);
       el('td', 'num', tr).textContent = fmtInt(r.n);
@@ -339,6 +355,7 @@ async function renderDetail(view: HTMLElement, tag: ThresholdTag, summary: Thres
   // prefilled with this tag as the main genre/tag
   const cta = el('p', 'analytics-cta', view);
   const ctaLink = el('a', undefined, cta);
-  ctaLink.href = `../analyzer?tag=${encodeURIComponent(tag.name)}`;
+  ctaLink.href = `${sitePagePath('analyzer')}?tag=${encodeURIComponent(tag.name)}`;
   ctaLink.textContent = 'Making a game like this? Get tag recommendations →';
+  return true;
 }

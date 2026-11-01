@@ -1,3 +1,4 @@
+import { tagPageUrl } from '../site-path';
 import { getReviewThreshold } from './review-threshold';
 import { thresholdTrends } from './threshold-data';
 import { getTrends, type TrendsFile, type TrendTag } from './data';
@@ -8,11 +9,6 @@ import { initEqualAgeTrends } from './equal-age';
 const SERIES_COLORS = [SERIES_1, SERIES_2, SERIES_3, SERIES_4];
 const MAX_COMPARE = 4;
 const MIN_RECENT_RELEASES = 30; // sample floor for the risers/fallers tables
-
-// Path to the tag explorer from /trends/ (Pages) or /trends.html (dev harness).
-function tagsPath(): string {
-  return location.pathname.replace(/\/trends(\.html|\/)?$/, '/tags$1');
-}
 
 interface Momentum {
   tag: TrendTag;
@@ -180,7 +176,7 @@ async function initLegacyTrends(root: HTMLElement): Promise<void> {
       const row = el('tr', undefined, tbody);
       const cell = el('td', undefined, row);
       const link = el('a', 'tag-link', cell);
-      link.href = `${tagsPath()}?threshold=${getReviewThreshold()}#${m.tag.id}`;
+      link.href = tagPageUrl(m.tag.id, m.tag.name, getReviewThreshold());
       link.textContent = m.tag.name;
       el('td', 'num', row).textContent = fmtPct(m.recentShare, 2);
       const ratioCell = el('td', 'num', row);

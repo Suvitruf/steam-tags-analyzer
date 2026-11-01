@@ -1,0 +1,22 @@
+---
+layout: default
+---
+<h1>{{ page.tag.name | escape }} Steam tag</h1>
+<p class="analytics-intro">{{ page.description | escape }}</p>
+
+<div id="tag-explorer" data-prerendered="true">
+  <p><a href="{{ '/tags/' | relative_url }}">← All tags</a></p>
+  <h2>Review statistics</h2>
+  <p class="viz-caption">Snapshot exported {{ page.snapshot_date }}. Observation dates vary by game. Includes released games with observed review totals, including zero; missing totals are excluded.</p>
+  <div class="stat-row">
+    <div class="stat-tile"><div class="stat-label">Games</div><div class="stat-value">{{ page.tag.gamesLabel }}</div></div>
+    <div class="stat-tile"><div class="stat-label">Released last 365 days</div><div class="stat-value">{{ page.tag.releasesLabel }}</div></div>
+    <div class="stat-tile"><div class="stat-label">Median reviews</div><div class="stat-value">{{ page.tag.medianLabel }}</div></div>
+    <div class="stat-tile"><div class="stat-label">Reach 250+ reviews</div><div class="stat-value">{{ page.tag.rateLabel }}</div><div class="stat-note">Catalog baseline: {{ page.baseline_label }}</div></div>
+    <div class="stat-tile"><div class="stat-label">Positive reviews</div><div class="stat-value">{{ page.tag.loveLabel }}</div><div class="stat-note">Equal-weight, Bayesian-adjusted average over games with at least 10 reviews; shown with at least 30 rated games.</div></div>
+  </div>
+  {% if page.tag.count < 30 %}<p class="small-sample-warning">Only {{ page.tag.count }} games carry this tag. Treat these small-sample statistics with care.</p>{% endif %}
+  <p>Use this page to research games currently carrying the {{ page.tag.name | escape }} tag and compare their observed review outcomes. Tags can change after release, and older games have had more time to accumulate reviews. Reaching a review threshold does not measure sales, revenue, profitability, or the effect of adding a tag.</p>
+  <p class="viz-caption">These initial figures use the default threshold of 250 reviews. Interactive charts and the threshold control load when JavaScript is available.</p>
+  <p><a href="{{ '/benchmarks/' | relative_url }}?include={{ page.tag.id }}&amp;threshold=250">Explore this tag in Niche Benchmarks</a> · <a href="{{ '/coverage/' | relative_url }}">Data coverage and metric definitions</a></p>
+</div>

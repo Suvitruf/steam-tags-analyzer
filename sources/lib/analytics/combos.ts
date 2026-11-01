@@ -1,11 +1,6 @@
+import { tagPageUrl } from '../site-path';
 import { getCombos, getTagsSummary, type CombosFile, type TagsSummaryFile } from './data';
 import { el, fmtInt, fmtCompact, fmtPct, fmtLift } from './format';
-
-// Path to the tag explorer, correct under the Pages baseurl (/…/combos/) and
-// the vite dev harness (/combos.html).
-function tagsPath(): string {
-  return location.pathname.replace(/\/combos(\.html|\/)?$/, '/tags$1');
-}
 
 interface PairRow {
   aIdx: number;
@@ -67,7 +62,7 @@ export async function initComboExplorer(root: HTMLElement): Promise<void> {
   const tagLink = (idx: number, parent: Element) => {
     const t = combos.tags[idx];
     const a = el('a', 'tag-link', parent);
-    a.href = `${tagsPath()}#${t.id}`;
+    a.href = tagPageUrl(t.id, t.name);
     a.textContent = t.name;
   };
 

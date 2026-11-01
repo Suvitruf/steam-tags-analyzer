@@ -146,7 +146,7 @@ function renderTagRow(t: AuditedTag, neighborEvidenceAvailable: boolean): string
     (neighborEvidenceAvailable ? `neighbor vote ${(t.neighborVote * 100).toFixed(0)}%` : 'similar-game tag data unavailable or incomplete') +
     (t.verifiedBy.length ? ` · store features: ${t.verifiedBy.join(', ')}` : '');
   const name = t.active
-    ? `<a class="tag-name-link" href="${tagPageUrl(t.tagId)}" title="Open tag stats: distribution, trends, combos">${escapeHtml(t.tag)}</a>`
+    ? `<a class="tag-name-link" href="${tagPageUrl(t.tagId, t.tag)}" title="Open tag stats: distribution, trends, combos">${escapeHtml(t.tag)}</a>`
     : escapeHtml(t.tag);
   return `
     <li class="audit-row audit-${t.bucket}" title="${escapeHtml(tooltip)}">
@@ -167,7 +167,7 @@ function renderRecList(tags: TagRecommendation[], type: 'add' | 'avoid'): string
       return `
       <li class="tag-item">
         <div class="tag-header">
-          <span class="tag-name"><a class="tag-name-link" href="${tagPageUrl(t.tagId)}" title="Open tag stats: distribution, trends, combos">${escapeHtml(t.tag)}</a></span>
+          <span class="tag-name"><a class="tag-name-link" href="${tagPageUrl(t.tagId, t.tag)}" title="Open tag stats: distribution, trends, combos">${escapeHtml(t.tag)}</a></span>
           <span class="tag-score" title="Strength: ${strength}/100 · raw ${t.score.toFixed(3)} · relevance ${(t.relevance * 100).toFixed(0)}% · lift ${t.successLift.toFixed(1)}x">
             ${type === 'avoid' ? '⚠' : strength}
           </span>

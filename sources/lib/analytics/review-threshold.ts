@@ -1,3 +1,4 @@
+import { tagIdFromPath } from '../tag-route.mjs';
 import { DEFAULT_REVIEW_THRESHOLD, reviewThreshold } from './core/thresholds';
 import { el } from './format';
 
@@ -29,11 +30,11 @@ export function mountReviewThreshold(root:HTMLElement):boolean {
     const url=new URL(location.href);url.searchParams.set('threshold',String(value));history.replaceState(null,'',url);
     try{localStorage.setItem(KEY,String(value));}catch{/* Links keep the setting without storage. */}
     for(const link of document.querySelectorAll<HTMLAnchorElement>('a[href]')){
-      const target=new URL(link.href);if(target.origin===location.origin&&/\/(tags|benchmarks|trends|timing|features|prices|combos|map|lifecycle|publishers)(\.html|\/)?$/.test(target.pathname)){
+      const target=new URL(link.href);if(target.origin===location.origin&&(/\/(tags|benchmarks|trends|timing|features|prices|combos|map|lifecycle|publishers)(\.html|\/)?$/.test(target.pathname)||tagIdFromPath(target.pathname)!==null)){
         target.searchParams.set('threshold',String(value));link.href=target.href;
       }
     }
   }
-  else root.textContent='Choose a valid review threshold to load the comparisons.';
+  else if (root.dataset.prerendered !== 'true') root.textContent='Choose a valid review threshold to load the comparisons.';
   return valid;
 }

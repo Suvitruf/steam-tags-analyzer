@@ -8,8 +8,9 @@ export function getManifest(): Promise<AnalyticsManifest | null> {
 }
 
 async function loadManifest(): Promise<AnalyticsManifest | null> {
-  const response = await fetch(`${ANALYTICS_BASE}/manifest.json`, { cache: 'no-cache' });
-  if (response.status === 404) return null; // Explicit legacy mode, disclosed in coverage.
+  const pinned = typeof document === 'undefined' ? undefined : document.querySelector<HTMLMetaElement>('meta[name="analytics-manifest"]')?.content;
+  const response = await fetch(pinned || `${ANALYTICS_BASE}/manifest.json`, { cache: 'no-cache' });
+  if (response.status === 404 && !pinned) return null; // Explicit legacy mode, disclosed in coverage.
   if (!response.ok) throw new Error(`Analytics manifest unavailable (${response.status})`);
   const data = await response.json() as AnalyticsManifest;
   if (data.schemaVersion !== ANALYTICS_SCHEMA || !/^releases\/[\w-]+$/.test(data.basePath)

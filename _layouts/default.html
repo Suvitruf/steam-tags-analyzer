@@ -3,9 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ page.title | default: site.title }}</title>
-  <meta name="description" content="{{ page.description | default: site.description }}">
-  {% seo %}
+  <title>{{ page.title | default: site.title | escape }}</title>
+  <meta name="site-baseurl" content="{{ site.baseurl | escape }}">
+  {% seo title=false %}
+  {% if page.tag_page %}<meta name="analytics-manifest" content="{{ '/assets/tag-pages-manifest.json' | relative_url }}">{% endif %}
+  {% if page.noindex %}<meta name="robots" content="noindex">{% endif %}
   <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
 </head>
 <body>
@@ -15,25 +17,7 @@
     <div class="wrapper">
       <a class="site-title" href="{{ '/' | relative_url }}">{{ site.title }}</a>
       {% include social-links.html %}
-      <nav class="site-nav">
-        <a href="{{ '/analyzer' | relative_url }}">Analyzer</a>
-        <a href="{{ '/audit' | relative_url }}">Audit</a>
-        <a href="{{ '/benchmarks/' | relative_url }}">Benchmarks</a>
-        <a href="{{ '/publishers/' | relative_url }}">Publishers</a>
-        <a href="{{ '/compare/' | relative_url }}">Compare</a>
-        <a href="{{ '/lifecycle/' | relative_url }}">Lifecycle</a>
-        <a href="{{ '/upcoming/' | relative_url }}">Upcoming</a>
-        <a href="{{ '/momentum/' | relative_url }}">Momentum</a>
-        <a href="{{ '/tags/' | relative_url }}">Tags</a>
-        <a href="{{ '/combos/' | relative_url }}">Combos</a>
-        <a href="{{ '/trends/' | relative_url }}">Trends</a>
-        <a href="{{ '/trending/' | relative_url }}">Trending</a>
-        <a href="{{ '/features/' | relative_url }}">Features</a>
-        <a href="{{ '/prices/' | relative_url }}">Pricing</a>
-        <a href="{{ '/timing/' | relative_url }}">Timing</a>
-        <a href="{{ '/map/' | relative_url }}">Market Map</a>
-        <a href="{{ '/tag-changes/' | relative_url }}">Changelog</a>
-      </nav>
+      {% include site-nav.html %}
     </div>
   </header>
 
@@ -43,7 +27,7 @@
       <nav class="breadcrumbs" aria-label="Breadcrumb">
         <a href="{{ '/' | relative_url }}">Home</a>
         <span class="crumb-sep" aria-hidden="true">›</span>
-        <span class="crumb-current" id="breadcrumb-current">{{ page.title }}</span>
+        <span class="crumb-current" id="breadcrumb-current">{% if page.tag %}<a href="{{ '/tags/' | relative_url }}">Tag Explorer</a><span class="crumb-sep" aria-hidden="true"> › </span>{{ page.tag.name | escape }}{% else %}{{ page.title | escape }}{% endif %}</span>
       </nav>
       {% endunless %}
       {{ content }}
@@ -59,5 +43,6 @@
 
   <script type="module" src="{{ '/assets/js/app.js' | relative_url }}"></script>
   <script type="module" src="{{ '/assets/js/analytics.js' | relative_url }}"></script>
+  {% if page.extra_script %}<script type="module" src="{{ '/assets/js/' | append: page.extra_script | append: '.js' | relative_url }}"></script>{% endif %}
 </body>
 </html>

@@ -18,13 +18,7 @@ export function fmtReviews(n: number): string {
   return String(n);
 }
 
-// Link into the tag analytics page for a tag. The analyzer and the audit live
-// at <baseurl>/analyzer and <baseurl>/audit (no trailing slash), so a relative
-// 'tags/#id' resolves to <baseurl>/tags/#id; the vite dev harness serves
-// /tags.html instead.
-export function tagPageUrl(tagId: number): string {
-  return import.meta.env.DEV ? `/tags.html#${tagId}` : `tags/#${tagId}`;
-}
+export { tagPageUrl } from '../site-path';
 
 export function storeUrl(appid: number): string {
   return `https://store.steampowered.com/app/${appid}/`;

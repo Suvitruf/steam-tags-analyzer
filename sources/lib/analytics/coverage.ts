@@ -2,11 +2,10 @@ import { getManifest, fetchAnalytics } from './snapshot';
 import type { CollectionHealthFile } from './core/collection-health';
 import { el, fmtInt } from './format';
 import { tableTwin } from './charts';
+import { sitePagePath } from '../site-path';
 
 export function analyticsPath(page: string): string {
-  const dev = /\.html$/.test(location.pathname) || location.pathname === '/';
-  const base = location.pathname.replace(/\/[^/]+\/?$/, '/');
-  return dev ? `${base}${page}.html` : `${base}${page}/`;
+  return sitePagePath(page);
 }
 
 export async function coverageNotice(root: HTMLElement): Promise<void> {

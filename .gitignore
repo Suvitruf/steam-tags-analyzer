@@ -31,3 +31,9 @@ CLAUDE.md
 # Python release-packaging tools.
 __pycache__/
 *.py[cod]
+
+# Static tag pages are regenerated from a validated CDN snapshot.
+/_tag_pages/
+/_data/tag_pages.json
+/assets/tag-pages.json
+/assets/tag-pages-manifest.json

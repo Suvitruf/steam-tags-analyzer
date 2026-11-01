@@ -15,6 +15,7 @@ Steam Tag Analyzer helps indie developers describe their game, find relevant com
 - **Audit an existing store page.** Inspect which tags describe the game, correspond to declared store features, or deserve further investigation.
 - **Build a comparison cohort.** Filter by release years, tag positions, included/excluded tags, observed price, features, and publisher-name states. Save filters on your device, share links, and export game lists as CSV.
 - **Compare outcomes.** Explore review distributions, reception, concentration, and validated H3/H6/H12 review histories. Review thresholds are configurable, with **250 reviews** as the default.
+- **Share tag research.** Every tag has a permanent page such as `/tags/492-indie/`, with a description and basic statistics readable without JavaScript. Charts and the configurable review threshold load in the browser.
 - **Research positioning.** Inspect tag combinations, market trends, pricing, declared features, release timing, upcoming release windows, and publisher catalogs relevant to your niche.
 
 | Area | Pages |
@@ -71,3 +72,13 @@ The [monthly database workflow](.github/workflows/monthly-database.yml) runs on 
 ## License
 
 Client source code is available under the [MIT License](LICENSE). Steam data, trademarks, model artifacts, and third-party dependencies retain their respective terms and licenses.
+
+## Static tag pages
+
+`npm run build` validates the current CDN analytics manifest and summary checksum, generates one HTML page per tag, builds the browser bundles, and checks the resulting site. No database, model files, API keys, or backend are needed at build time. `npm run dev` also supports `/tags/<id>-<name>/` routes.
+
+The numeric ID identifies a tag; the readable name suffix is decorative. Existing `/tags/#492` links continue to work. On GitHub Pages, obsolete or mistyped suffixes use the custom 404 page to redirect by ID with JavaScript. Canonical links point directly to generated HTML; unknown IDs stay on the 404 page.
+
+Each page includes its snapshot date, canonical URL, sharing metadata, and a sitemap entry. Static figures use 250 reviews by default; interactive charts retain the selected threshold and use the same immutable snapshot as the HTML. Publication dates are not observation dates for every game.
+
+The Pages workflow rebuilds on pushes, manual dispatch, and daily at 13:17 UTC (GitHub may delay scheduled runs). If the source is unavailable or fails validation, deployment stops and the published site stays intact. For an offline build, set `TAG_PAGES_SOURCE` to a local directory containing `manifest.json` and its immutable `releases/<snapshot>/tags-summary.json`.

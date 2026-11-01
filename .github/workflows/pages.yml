@@ -4,6 +4,8 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: '17 13 * * *' # Refresh static tag statistics after the daily CDN export.
 
 permissions:
   contents: read

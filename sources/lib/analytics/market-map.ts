@@ -1,3 +1,4 @@
+import { tagPageUrl } from '../site-path';
 import { getTagsSummary } from './data';
 import { scatterChart } from './charts';
 import { el, fmtInt, fmtPct } from './format';
@@ -36,9 +37,8 @@ export async function initMarketMap(root: HTMLElement): Promise<void> {
     xLabel: 'releases, last 365 days',
     yLabel: 'share reaching 250+ reviews',
     onSelect: id => {
-      // works under the Pages baseurl (/steam-tags/map/) and the dev harness (/map.html)
-      const base = location.pathname.replace(/\/map(\.html|\/)?$/, '/tags$1');
-      location.href = `${base}#${id}`;
+      const tag = summary.tags.find(t => t.id === id);
+      if (tag) location.href = tagPageUrl(tag.id, tag.name);
     },
   });
 }

@@ -5,6 +5,10 @@ url: "https://steam-tags-analyzer.apanasik.com"
 theme: minima
 plugins:
   - jekyll-seo-tag
+  - jekyll-sitemap
+collections:
+  tag_pages:
+    output: true
 exclude:
   - sources/
   - tools/

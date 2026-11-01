@@ -1,23 +1,38 @@
 import { defineConfig } from 'vite';
 import path from 'path';
 import { readFileSync } from 'node:fs';
+import { tagIdFromPath } from './lib/tag-route.mjs';
 
 const steamPromoPath = path.resolve(__dirname, '../_includes/steam-promo.html');
 const socialLinksPath = path.resolve(__dirname, '../_includes/social-links.html');
-const sharedIncludePaths = [steamPromoPath, socialLinksPath];
+const siteNavPath = path.resolve(__dirname, '../_includes/site-nav.html');
+const sharedIncludePaths = [steamPromoPath, socialLinksPath, siteNavPath];
+
+function devNavigation(): string {
+  // Jekyll and Vite share the page list; only the development URLs differ.
+  return readFileSync(siteNavPath, 'utf8').replace(/\{\{\s*'([^']+)'\s*\|\s*relative_url\s*\}\}/g, (_match, route: string) => {
+    const page = route.replace(/^\/|\/$/g, '');
+    return page === 'analyzer' ? '/' : `/${page}.html`;
+  });
+}
 
 export default defineConfig(({ command }) => ({
   root: path.resolve(__dirname),
   plugins: [{
     name: 'shared-site-includes',
     apply: 'serve',
-    // Use the same promotion and social links as Jekyll on every dev page.
+    // Use the same navigation, promotion and social links on every dev page.
     transformIndexHtml(html) {
       return html
         .replace(/<body\b[^>]*>/i, body => `${body}\n${readFileSync(steamPromoPath, 'utf8')}`)
-        .replace('<nav class="site-nav">', nav => `${readFileSync(socialLinksPath, 'utf8')}\n${nav}`);
+        .replace(/<nav\b[^>]*class="site-nav"[^>]*>[\s\S]*?<\/nav>/, () => `${readFileSync(socialLinksPath, 'utf8')}\n${devNavigation()}`);
     },
     configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        const url = new URL(req.url || '/', 'http://localhost');
+        if (tagIdFromPath(url.pathname) !== null) req.url = `/tags.html${url.search}`;
+        next();
+      });
       server.watcher.add(sharedIncludePaths);
       server.watcher.on('change', file => {
         if (sharedIncludePaths.includes(path.resolve(file))) server.ws.send({ type: 'full-reload' });
@@ -50,6 +65,7 @@ export default defineConfig(({ command }) => ({
       input: {
         app: path.resolve(__dirname, 'lib/main.ts'),
         analytics: path.resolve(__dirname, 'lib/analytics/main.ts'),
+        'tag-redirect': path.resolve(__dirname, 'lib/tag-redirect.ts'),
       },
       output: {
         entryFileNames: '[name].js',

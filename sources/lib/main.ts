@@ -89,7 +89,7 @@ function renderTagList(tags: RecommendationOutput['primaryTags'], type: string, 
       return `
       <li class="tag-item">
         <div class="tag-header">
-          <span class="tag-name"><a class="tag-name-link" href="${tagPageUrl(t.tagId)}" title="Open tag stats: distribution, trends, combos">${t.tag}</a>${haveBadge}</span>
+          <span class="tag-name"><a class="tag-name-link" href="${tagPageUrl(t.tagId, t.tag)}" title="Open tag stats: distribution, trends, combos">${t.tag}</a>${haveBadge}</span>
           <span class="tag-score" title="Strength: ${strength}/100 · raw ${t.score.toFixed(3)} · relevance ${(t.relevance * 100).toFixed(0)}% · lift ${t.successLift.toFixed(1)}x">
             ${type === 'avoid' ? '⚠' : strength}
           </span>

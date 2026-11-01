@@ -1,0 +1,6 @@
+<p class="viz-caption">Browse {{ site.data.tag_pages.tags.size }} Steam tags. Open a tag for its description and review statistics. Snapshot exported {{ site.data.tag_pages.generatedAt | slice: 0, 10 }}.</p>
+<ul class="tag-directory">
+  {% for tag in site.data.tag_pages.tags %}
+  <li><a href="{{ tag.path | relative_url }}">{{ tag.name | escape }}</a> <span class="viz-caption">{{ tag.gamesLabel }} games</span></li>
+  {% endfor %}
+</ul>
