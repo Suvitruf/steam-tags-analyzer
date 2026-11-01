@@ -94,7 +94,6 @@ def prepare(database, headers_file, output, tag, source_url):
     (output / "release-notes.md").write_text(
         f"Monthly full Steam database snapshot: `{tag}`.\n\n"
         f"Packaged at {metadata['packagedAt']}; CDN object last modified: {modified or 'not provided'}. Collection dates vary by record.\n\n"
-        f"Source: [full working SQLite database]({source_url}). Includes review histories, detail observations, tag snapshots and collection state.\n\n"
         f"The snapshot contains {counts['apps']:,} apps. `metadata.json` lists table counts, SQLite user_version, source metadata and checksums for the compressed and uncompressed database.\n\n"
         "Download `steam-tags-working.db.gz`, `metadata.json` and `SHA256SUMS` into the same directory, then verify and unpack:\n\n"
         "```sh\nsha256sum --check SHA256SUMS\ngunzip --keep steam-tags-working.db.gz\n```\n\n"
