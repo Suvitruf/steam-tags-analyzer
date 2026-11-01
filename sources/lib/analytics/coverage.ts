@@ -63,12 +63,24 @@ export async function initCoverage(root: HTMLElement): Promise<void> {
     if(m.artifacts['collection-health.json']){
       const health=await fetchAnalytics<CollectionHealthFile>('collection-health.json'),h=health.current;
       el('h2',undefined,root).textContent='Collection progress and failures';
+      if(h.freshness){
+        const f=h.freshness;
+        tableTwin(root,['Released-game freshness','Games'],[
+          ['Missing review count',f.reviewsMissing],['Review count over 30 days old',f.reviewsOlder30],
+          ['Review count over 90 days old (included above)',f.reviewsOlder90],['No dated stored tags',f.tagsMissing],['Stored tags over 30 days old',f.tagsOlder30],
+        ]);
+      }
       el('p',undefined,root).textContent=`Upcoming catalog: ${fmtInt(h.upcoming.verified)} of ${fmtInt(h.upcoming.games)} games have a tracked successful detail observation; ${fmtInt(h.upcoming.dated)} have a release window. Undated games remain in the collection queue.`;
       tableTwin(root,['Release year','Catalog games','Tracked details','Tracked tags','Validated monthly source'],h.years.map(y=>[String(y.year??'Unknown'),y.games,y.details,y.tags,y.monthly]));
+      if(h.years.some(y=>y.weekly!==undefined)){
+        tableTwin(root,['Release year','Missing reviews','Reviews over 30d','Below 10 reviews','No successful history','Weekly history','Incomplete monthly history'],
+          h.years.map(y=>[String(y.year??'Unknown'),y.reviewsMissing??'Unknown',y.reviewsOlder30??'Unknown',y.belowReviewFloor??'Unknown',y.historyMissing??'Unknown',y.weekly??'Unknown',y.incomplete??'Unknown']));
+        el('p','viz-caption',root).textContent='History collection starts at ten observed reviews. Low-review and missing-history counts can overlap. Weekly intervals cannot establish exact calendar months; repeated fetches may keep returning weeks. A monthly source with known interior gaps can support a complete observed window elsewhere, but never a missing month. Lifecycle and Momentum check every month in their requested windows.';
+      }
       tableTwin(root,['Source (last 24 hours)','Latest attempt status','Distinct games'],h.attempts.map(a=>[a.source,a.status,a.games]));
       tableTwin(root,['History diagnostic (reasons can overlap)','Games'],h.diagnostics.map(d=>[d.reason,d.games]));
-      tableTwin(root,['Completed refresh','Released details','Released tags','Monthly histories','Upcoming details'],health.runs.map(r=>[r.recordedAt,r.totals.details,r.totals.tags,r.totals.monthly,r.totals.upcoming]));
-      el('p','viz-caption',root).textContent='Up to 90 completed refresh reports are retained. Counts track successful observations, not freshness or lifecycle eligibility. Attempt rows show the latest status per game and source in the last 24 hours, not request totals. Failed attempts preserve prior successful data. Progress starts when monitoring is deployed; no historical progress is reconstructed.';
+      tableTwin(root,['Completed refresh','Released details','Released tags','Monthly histories','Upcoming details','Reviews over 30d','Tags over 30d'],health.runs.map(r=>[r.recordedAt,r.totals.details,r.totals.tags,r.totals.monthly,r.totals.upcoming,r.freshness?.reviewsOlder30??'Unknown',r.freshness?.tagsOlder30??'Unknown']));
+      el('p','viz-caption',root).textContent='Up to 90 completed refresh reports are retained. Coverage counts track successful observations; age columns track the remaining stale records. Neither establishes lifecycle eligibility. Attempt rows show the latest status per game and source in the last 24 hours, not request totals. Failed attempts preserve prior successful data. Progress starts when monitoring is deployed; no historical progress is reconstructed.';
       if(!health.runs.length)el('p',undefined,root).textContent='No completed refresh reports have been recorded yet.';
     }
     for (const d of root.querySelectorAll('details')) d.open = true;
