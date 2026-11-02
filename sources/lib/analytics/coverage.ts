@@ -16,7 +16,7 @@ export async function coverageNotice(root: HTMLElement): Promise<void> {
     if (!manifest) note.textContent = 'Legacy analytics export: source coverage and snapshot consistency are unavailable. ';
     else {
       const c = manifest.coverage;
-      note.textContent = `Snapshot exported ${manifest.generatedAt.slice(0, 10)}. Review records: ${fmtInt(c.observedReviews)} / ${fmtInt(c.released)} released games; ${fmtInt(c.missingReviews)} unknown. `;
+      note.textContent = `Snapshot exported ${manifest.generatedAt.slice(0, 10)}. Collection across all games: ${fmtInt(c.observedReviews)} review records / ${fmtInt(c.released)} released games; ${fmtInt(c.missingReviews)} unknown. `;
       const old = c.sources.reviews.olderThan30Days;
       if (old) note.append(`${fmtInt(old)} review records are over 30 days old. `);
     }
@@ -31,7 +31,7 @@ export async function coverageNotice(root: HTMLElement): Promise<void> {
 export async function initCoverage(root: HTMLElement): Promise<void> {
   root.replaceChildren();
   el('p', 'analytics-intro', root).textContent =
-    'Analytics describe released Steam games observed by this project. Review thresholds are observed outcomes, not revenue, profitability, or the effect of changing a tag. Zero observed reviews and unavailable reviews are different states.';
+    'Collection coverage covers all games, regardless of the game-type filter on analytics pages. Analytics describe released Steam games observed by this project. Review thresholds are observed outcomes, not revenue, profitability, or the effect of changing a tag. Zero observed reviews and unavailable reviews are different states.';
   try {
     const m = await getManifest();
     if (!m) { el('p', undefined, root).textContent = 'This legacy export has no coverage manifest. Run the updated analytics export to populate this page.'; return; }

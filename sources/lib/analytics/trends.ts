@@ -83,7 +83,7 @@ async function initLegacyTrends(root: HTMLElement): Promise<void> {
 
   const intro = el('p', 'analytics-intro', root);
   intro.textContent =
-    `Which tags are rising or collapsing. "Share" = a tag's slice of ALL Steam releases that year, so Steam's own ` +
+    `Which tags are rising or collapsing. "Share" = a tag's slice of selected games released that year, so Steam's own ` +
     `growth is factored out. Momentum compares ${recentLabel} against ${priorLabel}; ${years[years.length - 1]} is ` +
     `partial and excluded from momentum. Tags with fewer than ${MIN_RECENT_RELEASES} recent releases are hidden. ` +
     `Caveats: release counts before ~2021 partly reflect Valve's tagging-tool changes, and genres run hype cycles ` +
@@ -93,7 +93,7 @@ async function initLegacyTrends(root: HTMLElement): Promise<void> {
 
   // --- comparison chart with tag picker ---
   const compareSection = el('section', 'viz-section', root);
-  el('h3', undefined, compareSection).textContent = 'Compare tags: share of all Steam releases per year';
+  el('h3', undefined, compareSection).textContent = 'Compare tags: share of selected releases per year';
 
   const picker = el('div', 'analytics-controls trend-picker', compareSection);
   const select = el('select', 'combo-select', picker);

@@ -1,3 +1,4 @@
+import { fetchPopulation } from './game-type';
 import { fetchAnalytics } from './snapshot';
 
 // Shapes mirror the analytics artifact schema output.
@@ -51,7 +52,7 @@ let summaryPromise: Promise<TagsSummaryFile> | null = null;
 
 export function getTagsSummary(): Promise<TagsSummaryFile> {
   if (!summaryPromise) {
-    summaryPromise = fetchAnalytics<TagsSummaryFile>(`tags-summary.json`);
+    summaryPromise = fetchPopulation<TagsSummaryFile>(`tags-summary.json`);
   }
   return summaryPromise;
 }
@@ -67,7 +68,7 @@ let combosPromise: Promise<CombosFile> | null = null;
 
 export function getCombos(): Promise<CombosFile> {
   if (!combosPromise) {
-    combosPromise = fetchAnalytics<CombosFile>(`combos.json`);
+    combosPromise = fetchPopulation<CombosFile>(`combos.json`);
   }
   return combosPromise;
 }
@@ -104,7 +105,7 @@ let timingPromise: Promise<TimingFile> | null = null;
 
 export function getTiming(): Promise<TimingFile> {
   if (!timingPromise) {
-    timingPromise = fetchAnalytics<TimingFile>(`timing.json`);
+    timingPromise = fetchPopulation<TimingFile>(`timing.json`);
   }
   return timingPromise;
 }
@@ -234,7 +235,7 @@ let pricesPromise: Promise<PricesFile> | null = null;
 
 export function getPrices(): Promise<PricesFile> {
   if (!pricesPromise) {
-    pricesPromise = fetchAnalytics<PricesFile>(`prices.json`);
+    pricesPromise = fetchPopulation<PricesFile>(`prices.json`);
   }
   return pricesPromise;
 }
@@ -252,7 +253,7 @@ let featuresPromise: Promise<FeaturesFile> | null = null;
 
 export function getFeatures(): Promise<FeaturesFile> {
   if (!featuresPromise) {
-    featuresPromise = fetchAnalytics<FeaturesFile>(`features.json`);
+    featuresPromise = fetchPopulation<FeaturesFile>(`features.json`);
   }
   return featuresPromise;
 }
@@ -261,7 +262,7 @@ let trendingPromise: Promise<TrendingFile> | null = null;
 
 export function getTrending(): Promise<TrendingFile> {
   if (!trendingPromise) {
-    trendingPromise = fetchAnalytics<TrendingFile>(`trending.json`);
+    trendingPromise = fetchPopulation<TrendingFile>(`trending.json`);
   }
   return trendingPromise;
 }
@@ -270,7 +271,7 @@ let trendsPromise: Promise<TrendsFile> | null = null;
 
 export function getTrends(): Promise<TrendsFile> {
   if (!trendsPromise) {
-    trendsPromise = fetchAnalytics<TrendsFile>(`trends.json`);
+    trendsPromise = fetchPopulation<TrendsFile>(`trends.json`);
   }
   return trendsPromise;
 }
@@ -280,7 +281,7 @@ const detailCache = new Map<number, Promise<TagDetail>>();
 export function getTagDetail(tagId: number): Promise<TagDetail> {
   let p = detailCache.get(tagId);
   if (!p) {
-    p = fetchAnalytics<TagDetail>(`tags/${tagId}.json`);
+    p = fetchPopulation<TagDetail>(`tags/${tagId}.json`);
     detailCache.set(tagId, p);
   }
   return p;

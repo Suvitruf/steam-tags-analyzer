@@ -1,6 +1,6 @@
 import { cohortControls } from './cohort-controls';
 import { getResearchIndex, getResearchYears, getResearchShard } from './research-data';
-import { fetchAnalytics } from './snapshot';
+import { fetchPopulation, populationPath } from './game-type';
 import { el, fmtInt, fmtPct } from './format';
 import { action, labeledInput, downloadGames, renderGameTable } from './research-ui';
 import { tableTwin, horizontalBars } from './charts';
@@ -10,7 +10,7 @@ import { publisherKey, publisherBucket, publishersInCohort, portfolioComposition
 
 export async function initPublishers(root:HTMLElement){
   try{
-    const [index,directory]=await Promise.all([getResearchIndex(),fetchAnalytics<PublisherIndex>('publisher-index.json')]);root.replaceChildren();
+    const [index,directory]=await Promise.all([getResearchIndex(),fetchPopulation<PublisherIndex>('publisher-index.json')]);root.replaceChildren();
     el('p','analytics-intro',root).textContent='Find publishers with observed releases in your niche, then inspect relevant titles and their wider catalog. These are store-page publisher credits, including self-publishing and joint credits. Catalog overlap does not measure publisher effectiveness or current submission interests.';
     const controls=cohortControls(root,index),status=el('p','coverage-warning',root),search=labeledInput(root,'Find a publisher',''),list=el('div',undefined,root),portfolio=el('section','viz-section',root);
     status.setAttribute('role','status');search.type='search';
@@ -35,7 +35,7 @@ export async function initPublishers(root:HTMLElement){
       const request=++detailSequence,cohortRequest=sequence;
       chosen=entry.key;controls.publish(state,{publisher:chosen});portfolio.textContent='Loading observed publisher catalog…';
       try{
-        const rows=await getResearchShard(`publishers/portfolios/${publisherBucket(entry.key,directory.buckets)}.json`);
+        const rows=await getResearchShard(populationPath(`publishers/portfolios/${publisherBucket(entry.key,directory.buckets)}.json`));
         if(request!==detailSequence||cohortRequest!==sequence)return;
         const games=rows.filter(g=>publisherKey(g.publisher)===entry.key),expected=new Set(entry.apps);
         if(games.length!==expected.size||games.some(g=>!expected.has(g.appid)))throw Error('Publisher catalog is incomplete in this snapshot.');

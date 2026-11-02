@@ -13,6 +13,7 @@ Steam Tag Analyzer helps indie developers describe their game, find relevant com
 
 - **Analyze a game pitch.** Get primary and secondary tags, misleading tags to avoid, and similar successful games that explain the recommendations.
 - **Audit an existing store page.** Inspect which tags describe the game, correspond to declared store features, or deserve further investigation.
+- **Choose paid or free games.** All game analytics offer All games, Paid games and Free games, with the selection saved on your device and in shared links.
 - **Build a comparison cohort.** Filter by release years, tag positions, included/excluded tags, observed price, features, and publisher-name states. Save filters on your device, share links, and export game lists as CSV.
 - **Compare outcomes.** Explore review distributions, reception, concentration, and validated H3/H6/H12 review histories. Review thresholds are configurable, with **250 reviews** as the default.
 - **Share tag research.** Every tag has a permanent page such as `/tags/492-indie/`, with a description and basic statistics readable without JavaScript. Charts and the configurable review threshold load in the browser.
@@ -29,6 +30,8 @@ Steam Tag Analyzer helps indie developers describe their game, find relevant com
 ## Reading the results
 
 Reviews are public observations, **not sales, revenue, or profitability**. Reaching a review threshold is an outcome to compare, not a universal definition of success. Unknown observations remain distinct from observed zeros.
+
+Paid/free groups use the latest observed final price: positive or zero. All games also includes unknown prices. Discounts can affect membership; zero observed price is not verified free-to-play status. Historical charts use the current price group. Data Coverage and Tag Changelog describe the entire collection and taxonomy.
 
 Current tags, prices, features, and publisher credits can differ from their launch-time values. Comparisons show associations and expose sample sizes and coverage limits. Equal-age comparisons require validated histories and release anchors; missing months are not filled with zeros. The Data Coverage page explains the snapshot, exclusions, and metric definitions.
 
@@ -74,6 +77,8 @@ The [monthly database workflow](.github/workflows/monthly-database.yml) runs on 
 Client source code is available under the [MIT License](LICENSE). Steam data, trademarks, model artifacts, and third-party dependencies retain their respective terms and licenses.
 
 ## Static tag pages
+
+Paid/free aggregate views require a data snapshot containing the corresponding population exports. Older snapshots report unavailable filtered data instead of showing all-game results. Static tag pages without JavaScript show the all-game snapshot.
 
 `npm run build` validates the current CDN analytics manifest and summary checksum, generates one HTML page per tag, builds the browser bundles, and checks the resulting site. No database, model files, API keys, or backend are needed at build time. `npm run dev` also supports `/tags/<id>-<name>/` routes.
 

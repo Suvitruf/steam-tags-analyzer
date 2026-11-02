@@ -1,4 +1,4 @@
-import { fetchAnalytics } from './snapshot';
+import { fetchPopulation, getGameType } from './game-type';
 import { el,fmtInt } from './format';
 import { labeledInput,labeledSelect,action,downloadCsv } from './research-ui';
 import { columnChart,SERIES_1 } from './charts';
@@ -7,7 +7,7 @@ import { selectUpcoming,upcomingMonths,type UpcomingFile,type UpcomingGame } fro
 
 export async function initUpcoming(root:HTMLElement):Promise<void>{
   try{
-    const data=await fetchAnalytics<UpcomingFile>('upcoming.json');root.replaceChildren();
+    const data=await fetchPopulation<UpcomingFile>('upcoming.json');root.replaceChildren();
     el('p','analytics-intro',root).textContent='Explore announced release windows for games still marked coming soon. Month, quarter and year announcements keep their original precision. Dates can change; these are observed plans, not confirmed launch dates.';
     el('p','research-counts',root).textContent=`${fmtInt(data.games.length)} verified coming-soon pages / ${fmtInt(data.catalogUnreleased)} unreleased catalog entries. ${fmtInt(data.unverified)} lack a tracked successful coming-soon observation and are excluded.`;
     const overdue=data.games.filter(g=>g.end!==null&&g.end<=data.asOf.slice(0,10)).length;
@@ -33,7 +33,7 @@ export async function initUpcoming(root:HTMLElement):Promise<void>{
       if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month.value)){error.textContent='Choose a valid starting month.';return;}
       const [year,m]=month.value.split('-').map(Number),from=`${month.value}-01`,to=new Date(Date.UTC(year,m-1+Number(horizon.value),1)).toISOString().slice(0,10);
       selected=selectUpcoming(data.games,from,to,precision.value,tag.value==='all'?null:Number(tag.value),unknown.checked).sort((a,b)=>(a.start??'9999').localeCompare(b.start??'9999')||a.name.localeCompare(b.name));
-      const params=new URLSearchParams({from:month.value,months:horizon.value,precision:precision.value,tag:tag.value,undated:unknown.checked?'1':'0'});history.replaceState(null,'',`${location.pathname}?${params}`);
+      const params=new URLSearchParams({gameType:getGameType(),from:month.value,months:horizon.value,precision:precision.value,tag:tag.value,undated:unknown.checked?'1':'0'});history.replaceState(null,'',`${location.pathname}?${params}`);
       el('h2',undefined,host).textContent='Announced release windows';
       const broad=selected.filter(g=>g.precision==='quarter'||g.precision==='year').length,undated=selected.filter(g=>g.precision==='unknown').length;
       el('p','research-counts',host).textContent=`${fmtInt(selected.length)} matching pages: ${fmtInt(broad)} broad windows and ${fmtInt(undated)} undated. Broad windows match when they overlap your selected months; undated pages are shown independently of the window.`;

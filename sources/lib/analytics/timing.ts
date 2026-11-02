@@ -40,7 +40,7 @@ export async function initTiming(root: HTMLElement): Promise<void> {
   select.setAttribute('aria-label', 'Pick a tag for its release timing');
   const optAll = el('option', undefined, select);
   optAll.value = '';
-  optAll.textContent = 'All Steam';
+  optAll.textContent = 'All selected games';
   for (const t of [...data.tags].sort((a, b) => a.name.localeCompare(b.name))) {
     const opt = el('option', undefined, select);
     opt.value = String(t.id);
@@ -56,7 +56,7 @@ export async function initTiming(root: HTMLElement): Promise<void> {
       : data.tags.find(t => t.id === parseInt(select.value, 10)) ?? null;
     const rel = tag ? tag.rel : data.all.rel;
     const hits = tag ? tag.hits : data.all.hits;
-    const subject = tag ? tag.name : 'all Steam';
+    const subject = tag ? tag.name : 'all selected games';
 
     const relSection = el('section', 'viz-section', host);
     el('h3', undefined, relSection).textContent = `Releases by month — ${subject}`;
@@ -76,7 +76,7 @@ export async function initTiming(root: HTMLElement): Promise<void> {
     const small = tag ? MONTHS.filter((_, i) => rel[i] < MIN_MONTH_RELEASES) : [];
     el('p', 'viz-caption', hitSection).textContent =
       `Share of each month's ${y0}–${y1} releases that reached ${threshold}+ reviews.` +
-      (tag ? ` The gray line is the all-Steam baseline.` : '') +
+      (tag ? ` The gray line is the selected-population baseline.` : '') +
       (small.length ? ` ⚠ Months with <${MIN_MONTH_RELEASES} releases (${small.join(', ')}) are noise.` : '');
 
     if (tag) {
@@ -84,7 +84,7 @@ export async function initTiming(root: HTMLElement): Promise<void> {
         categories: MONTHS,
         series: [
           { name: tag.name, color: SERIES_1, values: hitRates(tag.rel, tag.hits) },
-          { name: 'All Steam', color: SERIES_2, values: hitRates(data.all.rel, data.all.hits) },
+          { name: 'All selected games', color: SERIES_2, values: hitRates(data.all.rel, data.all.hits) },
         ],
         valueFormat: v => `${v.toFixed(1)}%`,
         height: 200,

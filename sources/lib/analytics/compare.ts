@@ -1,5 +1,6 @@
 import { getResearchIndex, getResearchApps } from './research-data';
-import { fetchAnalytics } from './snapshot';
+import { fetchPopulation, getGameType } from './game-type';
+import { matchesGameType } from './core/game-type';
 import { el, fmtInt, fmtPct } from './format';
 import { labeledInput, action, downloadGames } from './research-ui';
 import { analyticsPath } from './coverage';
@@ -21,7 +22,7 @@ export async function initCompare(root: HTMLElement): Promise<void> {
     search.addEventListener('input',()=>{void (async()=>{
       const request=++searchSeq,q=search.value.trim().toLowerCase();results.replaceChildren();if(q.length<3)return;
       try {
-        names??=fetchAnalytics<{games:Array<[number,string]>}>('research/search.json').catch(e=>{names=undefined;throw e;});
+        names??=fetchPopulation<{games:Array<[number,string]>}>('research/search.json').catch(e=>{names=undefined;throw e;});
         const rows=(await names).games;if(request!==searchSeq)return;
         const matches=rows.filter(([,name])=>name.toLowerCase().includes(q));
         el('p',undefined,results).textContent=`${fmtInt(matches.length)} matches; showing up to 20.`;
@@ -43,8 +44,11 @@ export async function initCompare(root: HTMLElement): Promise<void> {
         games=await getResearchApps(ids);if(request!==seq)return;
         const missing=ids.filter(id=>!games.some(g=>g.appid===id));
         if(missing.length)error.textContent=`Not in this released-game snapshot: ${missing.join(', ')}.`;
-        history.replaceState(null,'',`${location.pathname}${ids.length?'?apps='+ids.join(','):''}`);
-        if(!games.length){el('p',undefined,host).textContent='Add App IDs or search for games to begin.';return;}
+        const excluded=games.filter(g=>!matchesGameType(g.price,getGameType()));
+        games=games.filter(g=>matchesGameType(g.price,getGameType()));
+        if(excluded.length)error.textContent+=` Excluded by game type: ${excluded.map(g=>g.name).join(', ')}.`;
+        history.replaceState(null,'',`${location.pathname}?${new URLSearchParams({apps:ids.join(','),gameType:getGameType()})}`);
+        if(!games.length){el('p',undefined,host).textContent=excluded.length?'No selected games match this game type. Choose All games to compare them.':'Add App IDs or search for games to begin.';return;}
         csv.disabled=false;
         const table=el('table','tag-table',host),head=el('tr',undefined,el('thead',undefined,table));el('th',undefined,head).textContent='Measure';
         for(const g of games){const th=el('th',undefined,head),link=el('a',undefined,th);link.href=`https://store.steampowered.com/app/${g.appid}/`;link.textContent=g.name;

@@ -1,3 +1,4 @@
+import { matchesGameType, type GameType } from './game-type';
 import { quantile, wilson } from './shared';
 import { comparisonThresholds, DEFAULT_REVIEW_THRESHOLD } from './thresholds';
 
@@ -39,6 +40,7 @@ export function unpackGames(shard: ResearchShard | CohortShard): ResearchGame[] 
   });
 }
 export interface CohortFilter {
+  gameType?: GameType;
   include: number[]; exclude: number[]; mode: 'all' | 'any'; rank: number | null;
   price: 'all' | 'zero' | 'positive' | 'usd' | 'unknown'; rated: boolean;
   parties: 'all' | 'match' | 'different' | 'unknown'; features: string[];
@@ -47,6 +49,7 @@ export const DEFAULT_FILTER: CohortFilter = { include:[], exclude:[], mode:'all'
 
 export function selectCohort(games: ResearchGame[], f: CohortFilter): ResearchGame[] {
   return games.filter(g => {
+    if (!matchesGameType(g.price, f.gameType)) return false;
     if ((f.include.length || f.exclude.length) && !g.tags.length) return false;
     if (f.include.length || f.exclude.length) {
       const tags = new Set(g.tags.filter(([,r]) => f.rank === null || (r !== null && r <= f.rank)).map(([id])=>id));

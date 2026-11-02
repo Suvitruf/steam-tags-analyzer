@@ -1,3 +1,4 @@
+import { gameType } from './game-type';
 import { DEFAULT_FILTER, type CohortFilter, type ResearchIndex } from './cohorts';
 import { reviewThreshold } from './thresholds';
 
@@ -23,12 +24,12 @@ export function parseCohortState(query:URLSearchParams,index:ResearchIndex):Coho
   // Old Lifecycle links used mode for the chart; canonical cohort mode means tag matching.
   const mode=query.get('mode')==='cumulative'||query.get('mode')==='monthly'?'all':choice('mode',['all','any'],'all');
   return {from,to,threshold:reviewThreshold(query.get('threshold')),filter:{...DEFAULT_FILTER,include:tags(query.get('include')??query.get('tag')??''),exclude:tags(query.get('exclude')??''),mode,
-    rank:rank==='any'?null:Number(rank),price:choice('price',['all','zero','positive','usd','unknown'],'all'),
+    gameType:gameType(query.get('gameType')),rank:rank==='any'?null:Number(rank),price:choice('price',['all','zero','positive','usd','unknown'],'all'),
     parties:choice('parties',['all','match','different','unknown'],'all'),rated:query.get('rated')==='1'||query.get('population')==='rated',
     features:[...new Set(query.getAll('feature').map(s=>s.trim()).filter(Boolean))]}};
 }
 export function cohortQuery(state:CohortState):URLSearchParams {
-  const f=state.filter,p=new URLSearchParams({from:String(state.from),to:String(state.to),mode:f.mode,rank:f.rank===null?'any':String(f.rank),price:f.price,parties:f.parties,threshold:String(reviewThreshold(state.threshold))});
+  const f=state.filter,p=new URLSearchParams({from:String(state.from),to:String(state.to),mode:f.mode,rank:f.rank===null?'any':String(f.rank),gameType:f.gameType??'all',price:f.price,parties:f.parties,threshold:String(reviewThreshold(state.threshold))});
   if(f.include.length)p.set('include',f.include.join(','));if(f.exclude.length)p.set('exclude',f.exclude.join(','));
   if(f.rated)p.set('rated','1');for(const feature of f.features)p.append('feature',feature);return p;
 }

@@ -1,3 +1,4 @@
+import { getGameType, gameTypeLink } from './game-type';
 import { getTagsSummary, getTagDetail } from './data';
 import { getReviewThreshold } from './review-threshold';
 import { thresholdSummary, thresholdDetail, type ThresholdSummary, type ThresholdTag } from './threshold-data';
@@ -31,7 +32,7 @@ function setBreadcrumb(tagName: string | null): void {
     crumb.textContent = crumb.dataset.baseTitle;
   } else {
     const back = el('a', undefined, crumb);
-    back.href = sitePagePath('tags');
+    back.href = gameTypeLink(sitePagePath('tags'));
     back.textContent = 'Tag Explorer';
     const sep = el('span', 'crumb-sep', crumb);
     sep.setAttribute('aria-hidden', 'true');
@@ -42,7 +43,7 @@ function setBreadcrumb(tagName: string | null): void {
 }
 
 export async function initTagExplorer(root: HTMLElement): Promise<void> {
-  const prerendered = root.dataset.prerendered === 'true';
+  const prerendered = root.dataset.prerendered === 'true' && getGameType() === 'all';
   if (!prerendered) root.textContent = 'Loading tag data…';
   let summary: ThresholdSummary;
   try {
@@ -73,7 +74,7 @@ export async function initTagExplorer(root: HTMLElement): Promise<void> {
   }
   const tag = summary.tags.find(t => t.id === pathId);
   if (!tag) {
-    if (!prerendered) root.textContent = 'This tag is not available in this snapshot.';
+    if (!prerendered) root.textContent = 'No games with observed review counts match this tag and game type in this snapshot.';
     return;
   }
   setBreadcrumb(tag.name);
@@ -94,7 +95,7 @@ function buildList(view: HTMLElement, summary: ThresholdSummary): void {
   const intro = el('p', 'analytics-intro', view);
   intro.textContent =
     `Every stat below is relative and review-based — no revenue estimates. ` +
-    `"Hit rate" = share of a tag's games reaching ${threshold}+ reviews (Steam-wide baseline: ${fmtPct(summary.baselineRate)}). ` +
+    `"Hit rate" = share of a tag's games reaching ${threshold}+ reviews (Selected-population baseline: ${fmtPct(summary.baselineRate)}). ` +
     `Universe: ${fmtInt(summary.gameCount)} released games. Updated ${summary.generatedAt.slice(0, 10)}.`;
 
   const controls = el('div', 'analytics-controls', view);
@@ -103,7 +104,7 @@ function buildList(view: HTMLElement, summary: ThresholdSummary): void {
   search.placeholder = 'Filter tags…';
   search.setAttribute('aria-label', 'Filter tags');
 
-  const table = el('table', 'tag-table', view);
+  const table = el('table', 'tag-table', el('div', 'research-table-scroll', view));
   const thead = el('thead', undefined, table);
   const headRow = el('tr', undefined, thead);
   const columns: Array<{ key: SortKey; label: string; title?: string }> = [
@@ -112,7 +113,7 @@ function buildList(view: HTMLElement, summary: ThresholdSummary): void {
     { key: 'releases365', label: 'Last 365d', title: 'Games released in the last 365 days' },
     { key: 'medianReviews', label: 'Median reviews' },
     { key: 'rate', label: 'Hit rate', title: `Share of games reaching ${threshold}+ reviews` },
-    { key: 'lift', label: 'vs Steam avg', title: 'Hit rate relative to the all-Steam baseline' },
+    { key: 'lift', label: 'vs group avg', title: 'Hit rate relative to the selected-population baseline' },
     { key: 'love', label: 'Positive', title: 'Average positive-review ratio (Bayesian-adjusted, ≥10-review games) — observed review reception' },
   ];
   let sortKey: SortKey = 'count';
@@ -183,7 +184,7 @@ async function renderDetail(view: HTMLElement, tag: ThresholdTag, summary: Thres
   view.replaceChildren();
 
   const back = el('a', 'tag-back', view);
-  back.href = `${sitePagePath('tags')}?threshold=${threshold}`;
+  back.href = gameTypeLink(`${sitePagePath('tags')}?threshold=${threshold}`);
   back.textContent = '← All tags';
 
   const h = el('h2', 'tag-heading', view);
@@ -206,7 +207,7 @@ async function renderDetail(view: HTMLElement, tag: ThresholdTag, summary: Thres
   statTile(tiles, 'Released last 365d', fmtCompact(detail.releases365));
   statTile(tiles, 'Median reviews', fmtInt(detail.medianReviews));
   statTile(tiles, `Reach ${threshold}+ reviews`, fmtPct(tag.rate),
-    tag.lift===null?'No baseline games reached this threshold':tag.count >= 30 ? `${fmtLift(tag.lift)} the Steam average (${fmtPct(summary.baselineRate)})` : 'small sample — read with care');
+    tag.lift===null?'No baseline games reached this threshold':tag.count >= 30 ? `${fmtLift(tag.lift)} the selected-population average (${fmtPct(summary.baselineRate)})` : 'small sample — read with care');
 
   // player love: how forgiving this tag's audience reviews.
   // != null (loose) also skips `undefined` from a stale cached JSON that
@@ -217,7 +218,7 @@ async function renderDetail(view: HTMLElement, tag: ThresholdTag, summary: Thres
       delta >= 0.03 ? 'above-average reception' :
       delta <= -0.03 ? 'below-average reception' : 'near-average reception';
     statTile(tiles, 'Positive reviews', fmtPct(detail.love, 0),
-      `${mood} (Steam average ${fmtPct(summary.baseline.love, 0)})`);
+      `${mood} (Group average ${fmtPct(summary.baseline.love, 0)})`);
   }
 
   if (detail.count < 30) {

@@ -1,4 +1,4 @@
-import { fetchAnalytics } from './snapshot';
+import { fetchPopulation, getGameType } from './game-type';
 import { el,fmtInt,fmtPct } from './format';
 import { labeledInput,labeledSelect,action,downloadCsv } from './research-ui';
 import { columnChart,tableTwin,SERIES_1,SERIES_2 } from './charts';
@@ -7,7 +7,7 @@ import type { MomentumFile } from './core/discovery';
 
 export async function initMomentum(root:HTMLElement):Promise<void>{
   try{
-    const data=await fetchAnalytics<MomentumFile>('momentum.json');root.replaceChildren();
+    const data=await fetchPopulation<MomentumFile>('momentum.json');root.replaceChildren();
     el('p','analytics-intro',root).textContent=`Compare ${data.months[0]}–${data.months[2]} with ${data.months[3]}–${data.months[5]}. Both periods use the same games with six explicitly observed complete months and first review activity before this window.`;
     el('p','research-counts',root).textContent=`${fmtInt(data.all.panelGames)} eligible games / ${fmtInt(data.all.selected)} released games. ${fmtInt(data.all.entrants)} games have first observed review activity in the recent period; they are counted separately and excluded from growth.`;
     const reasons:Record<string,string>={'unvalidated-source':'No successful source validation','non-monthly-or-incomplete-source':'Weekly or incomplete monthly source','stale-source':'Source does not cover the latest complete month','first-activity-within-window':'First activity within the comparison window','missing-month':'One or more comparison months missing'};
@@ -30,7 +30,7 @@ export async function initMomentum(root:HTMLElement):Promise<void>{
       const metric=(r:typeof rows[number])=>sort.value==='growth'?(r.stats.growth??-Infinity):sort.value==='breadth'?(r.stats.growingShare??-Infinity):r.stats.delta;
       rows.sort((a,b)=>metric(b)-metric(a)||a.name.localeCompare(b.name));
       if(!rows.some(r=>String(r.id)===focus))focus=String(rows[0]?.id??'');
-      const share=()=>history.replaceState(null,'',`${location.pathname}?${new URLSearchParams({rank:rank.value,min:minimum.value,sort:sort.value,q:search.value.trim(),focus})}`);share();
+      const share=()=>history.replaceState(null,'',`${location.pathname}?${new URLSearchParams({gameType:getGameType(),rank:rank.value,min:minimum.value,sort:sort.value,q:search.value.trim(),focus})}`);share();
       host.replaceChildren();el('h2',undefined,host).textContent='Growth breadth and concentration';
       el('p',undefined,host).textContent=`${fmtInt(rows.length)} matching tags. Growth percentages have no estimate when the previous period has zero reviews. Small samples are exploratory.`;
       if(!rows.length){el('p',undefined,host).textContent='No tags meet these filters. More validated monthly histories are needed, or choose a smaller sample threshold.';return;}

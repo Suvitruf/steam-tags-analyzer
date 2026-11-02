@@ -1,13 +1,14 @@
 import { aggregateThresholds, DEFAULT_REVIEW_THRESHOLD, type ThresholdFile } from './core/thresholds';
-import { fetchAnalytics, getManifest } from './snapshot';
+import { getManifest } from './snapshot';
+import { fetchPopulation, populationPath } from './game-type';
 import type { TagsSummaryFile, TagSummary, TagDetail, TrendsFile, TimingFile } from './data';
 
 let raw:Promise<ThresholdFile>|undefined;
 const counts=new Map<number,Promise<ReturnType<typeof aggregateThresholds>>>();
 async function load(){
   const manifest=await getManifest();
-  if(!manifest?.artifacts['review-thresholds.json'])throw Error('Custom review thresholds are unavailable in this data snapshot. Use 250 until newer data is published.');
-  return fetchAnalytics<ThresholdFile>('review-thresholds.json');
+  if(!manifest?.artifacts[populationPath('review-thresholds.json')])throw Error('Custom review thresholds are unavailable in this data snapshot. Use 250 until newer data is published.');
+  return fetchPopulation<ThresholdFile>('review-thresholds.json');
 }
 export function thresholdCounts(threshold:number){
   let p=counts.get(threshold);if(!p){raw??=load().catch(e=>{raw=undefined;throw e;});p=raw.then(data=>aggregateThresholds(data,threshold)).catch(e=>{counts.delete(threshold);throw e;});counts.set(threshold,p);}return p;

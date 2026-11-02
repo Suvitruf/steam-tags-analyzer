@@ -1,3 +1,4 @@
+import { getGameType } from './game-type';
 import { getReviewThreshold } from './review-threshold';
 import { cohortControls } from './cohort-controls';
 import { getResearchIndex, getResearchYears } from './research-data';
@@ -40,12 +41,12 @@ export async function initInsights(root:HTMLElement,view:View):Promise<void>{
       const tagRank=rank.value==='any'?null:Number(rank.value);
       try{
         const all=await getResearchYears(index,Number(year.value),Number(year.value));if(request!==sequence)return;
-        const base=selectCohort(all,{...DEFAULT_FILTER,rated:population.value==='rated'});
+        const base=selectCohort(all,{...DEFAULT_FILTER,gameType:getGameType(),rated:population.value==='rated'});
         selected=selectCohort(base,{...DEFAULT_FILTER,rank:tagRank,include:tag.value?[Number(tag.value)]:[]});
         host.replaceChildren();csv.disabled=false;
-        const params=new URLSearchParams({year:year.value,tag:tag.value,rank:rank.value,population:population.value,threshold:String(threshold)});if(second)params.set('second',second.value);
+        const params=new URLSearchParams({gameType:getGameType(),year:year.value,tag:tag.value,rank:rank.value,population:population.value,threshold:String(threshold)});if(second)params.set('second',second.value);
         history.replaceState(null,'',`${location.pathname}?${params}`);
-        benchmark.href=`${analyticsPath('benchmarks')}?from=${year.value}&to=${year.value}&include=${tag.value}${second?.value?','+second.value:''}&rank=${rank.value}&threshold=${threshold}${population.value==='rated'?'&rated=1':''}`;
+        benchmark.href=`${analyticsPath('benchmarks')}?gameType=${getGameType()}&from=${year.value}&to=${year.value}&include=${tag.value}${second?.value?','+second.value:''}&rank=${rank.value}&threshold=${threshold}${population.value==='rated'?'&rated=1':''}`;
         status.textContent=`${fmtInt(all.length)} released games in ${year.value}; ${fmtInt(base.length)} after the review-count rule; ${fmtInt(selected.length)} in the selected tag. Unknown-year games are outside this view.`;
         if(view==='map'){
           const grouped=groupByTag(base,tagRank);

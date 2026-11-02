@@ -12,5 +12,9 @@ export function sitePagePath(page: string): string {
 export function tagPageUrl(id: number, name: string, threshold?: number): string {
   const pathname = tagPath(id, name, siteBasePath());
   const cutoff = threshold === undefined ? new URLSearchParams(location.search).get('threshold') : String(threshold);
-  return cutoff === null ? pathname : `${pathname}?${new URLSearchParams({threshold: cutoff})}`;
+  const query = new URLSearchParams();
+  if (cutoff !== null) query.set('threshold', cutoff);
+  const gameType = new URLSearchParams(location.search).get('gameType');
+  if (gameType !== null) query.set('gameType', gameType);
+  return query.size ? `${pathname}?${query}` : pathname;
 }

@@ -1,3 +1,4 @@
+import { getGameType } from './game-type';
 import { el, fmtInt } from './format';
 import { action, labeledInput, labeledSelect } from './research-ui';
 import { analyticsPath } from './coverage';
@@ -7,6 +8,7 @@ import { getReviewThreshold } from './review-threshold';
 
 const STORAGE='steam-tags.saved-cohorts.v1';
 export function cohortControls(root:HTMLElement,index:ResearchIndex,query=new URLSearchParams(location.search)){
+  if(!query.has('gameType'))query.set('gameType',getGameType());
   if(!query.has('threshold'))query.set('threshold',String(getReviewThreshold()));
   const initial=parseCohortState(query,index),f=initial.filter;
   const form=el('form','research-controls',root),list=el('datalist',undefined,form);list.id='cohort-tags';
@@ -18,7 +20,7 @@ export function cohortControls(root:HTMLElement,index:ResearchIndex,query=new UR
   const rank=labeledSelect(form,'Tag positions',[['5','Top five'],['20','Top twenty'],['any','Any stored rank']],String(f.rank??'any'));
   const years=index.years.filter(y=>y.year!==null).map(y=>[String(y.year),`${y.year} (${fmtInt(y.count)})`] as [string,string]);
   const from=labeledSelect(form,'Release year from',years,String(initial.from)),to=labeledSelect(form,'Through',years,String(initial.to));
-  const price=labeledSelect(form,'Observed price',[['all','All observed-price states'],['zero','Zero price'],['positive','Positive price'],['usd','Positive verified USD price'],['unknown','Unknown price']],f.price);
+  const price=labeledSelect(form,'Price data',[['all','Any price data'],['usd','Positive verified USD price'],['unknown','Unknown price']],f.price);
   const parties=labeledSelect(form,'Publisher-name proxy',[['all','All name states'],['match','Matching developer/publisher names'],['different','Different names'],['unknown','Missing names']],f.parties);
   const features=labeledInput(form,'Required store categories (semicolon separated)',f.features.join('; '));features.placeholder='Steam Cloud; Single-player';
   const rated=labeledInput(form,'Only games with at least ten reviews','','checkbox');rated.checked=f.rated;
@@ -29,7 +31,7 @@ export function cohortControls(root:HTMLElement,index:ResearchIndex,query=new UR
   const savedList=el('div',undefined,savedHost),message=el('p','viz-caption',savedHost);message.setAttribute('role','status');
   let current:CohortState|null=null;
   function read(){
-    const p=new URLSearchParams({from:from.value,to:to.value,include:include.value,exclude:exclude.value,mode:mode.value,rank:rank.value,price:price.value,parties:parties.value,rated:rated.checked?'1':'0'});
+    const p=new URLSearchParams({from:from.value,to:to.value,include:include.value,exclude:exclude.value,mode:mode.value,rank:rank.value,gameType:getGameType(),price:price.value,parties:parties.value,rated:rated.checked?'1':'0'});
     for(const feature of features.value.split(';').map(s=>s.trim()).filter(Boolean))p.append('feature',feature);
     p.set('threshold',String(getReviewThreshold()));
     return parseCohortState(p,index);
