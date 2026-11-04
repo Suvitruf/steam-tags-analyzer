@@ -24,6 +24,10 @@ export function cohortControls(root:HTMLElement,index:ResearchIndex,query=new UR
   const parties=labeledSelect(form,'Publisher-name proxy',[['all','All name states'],['match','Matching developer/publisher names'],['different','Different names'],['unknown','Missing names']],f.parties);
   const features=labeledInput(form,'Required store categories (semicolon separated)',f.features.join('; '));features.placeholder='Steam Cloud; Single-player';
   const rated=labeledInput(form,'Only games with at least ten reviews','','checkbox');rated.checked=f.rated;
+  // Exposure window: exact release date to each game's review observation.
+  const ageMin=labeledInput(form,'Months since release, from',f.ageMin===null?'':String(f.ageMin),'number');
+  const ageMax=labeledInput(form,'Months since release, through',f.ageMax===null?'':String(f.ageMax),'number');
+  for(const input of [ageMin,ageMax]){input.min='0';input.step='any';input.placeholder='Any';input.inputMode='decimal';}
   const submit=el('button','research-button',form);submit.type='submit';submit.textContent='Apply filters';
   const navigation=el('nav','analytics-controls',root);navigation.setAttribute('aria-label','Explore this cohort');
   const savedHost=el('details',undefined,root);el('summary',undefined,savedHost).textContent='Saved cohorts on this device';
@@ -33,6 +37,7 @@ export function cohortControls(root:HTMLElement,index:ResearchIndex,query=new UR
   function read(){
     const p=new URLSearchParams({from:from.value,to:to.value,include:include.value,exclude:exclude.value,mode:mode.value,rank:rank.value,gameType:getGameType(),price:price.value,parties:parties.value,rated:rated.checked?'1':'0'});
     for(const feature of features.value.split(';').map(s=>s.trim()).filter(Boolean))p.append('feature',feature);
+    if(ageMin.value.trim())p.set('ageMin',ageMin.value.trim());if(ageMax.value.trim())p.set('ageMax',ageMax.value.trim());
     p.set('threshold',String(getReviewThreshold()));
     return parseCohortState(p,index);
   }

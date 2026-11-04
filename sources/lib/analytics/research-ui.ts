@@ -2,7 +2,7 @@ import { getReviewThreshold } from './review-threshold';
 import { el, fmtInt, fmtPct, histBucketLabel } from './format';
 import { columnChart, tableTwin, SERIES_1 } from './charts';
 import { analyticsPath } from './coverage';
-import { gamesCsv, summarizeCohort, type ResearchGame } from './core/cohorts';
+import { gamesCsv, summarizeCohort, type ResearchGame, ageFilterActive, exposureExclusions, type CohortFilter } from './core/cohorts';
 import { hydrateGames } from './research-data';
 
 export async function downloadGames(games: ResearchGame[], name: string): Promise<void> {
@@ -31,9 +31,24 @@ export function action(parent: Element, title: string, onClick:()=>void|Promise<
     finally {button.disabled=false;}
   });return button;
 }
-export function renderCohortSummary(parent: Element, games: ResearchGame[], title='Observed review outcomes'): void {
+/** What the months-since-release window did to the cohort, so dropped games are never silent. */
+export function exposureNoteText(loaded: ResearchGame[], filter: CohortFilter): string | null {
+  if(!ageFilterActive(filter))return null;
+  const x=exposureExclusions(loaded,filter);
+  const window=filter.ageMin!==null&&filter.ageMax!==null?`${filter.ageMin}–${filter.ageMax} months`:filter.ageMin!==null?`at least ${filter.ageMin} months`:`at most ${filter.ageMax} months`;
+  const dropped=([[x.outsideWindow,'outside the window'],[x.noReleaseDate,'without a day-precise release date'],[x.noObservation,'without an observed review count'],[x.unsupported,'from a data snapshot without release-day data']] as Array<[number,string]>)
+    .filter(([n])=>n>0).map(([n,why])=>`${fmtInt(n)} ${why}`);
+  return `Months since release: ${window}, measured from the exact release date to each game’s review observation. Kept ${fmtInt(x.kept)} of ${fmtInt(x.candidates)} games matching the other filters${dropped.length?`; dropped ${dropped.join(', ')}`:''}. Review counts remain lifetime totals at observation, so games at the two ends of the window still differ in time on sale.`;
+}
+export function renderExposureNote(parent: Element, loaded: ResearchGame[], filter: CohortFilter): void {
+  const text=exposureNoteText(loaded,filter);
+  if(text)el('p','research-counts',parent).textContent=text;
+}
+
+export function renderCohortSummary(parent: Element, games: ResearchGame[], title='Observed review outcomes', exposure?: {loaded: ResearchGame[]; filter: CohortFilter}): void {
   const stats=summarizeCohort(games,getReviewThreshold());
   el('h2',undefined,parent).textContent=title;
+  if(exposure)renderExposureNote(parent,exposure.loaded,exposure.filter);
   el('p','research-counts',parent).textContent=`${fmtInt(stats.selected)} selected games; ${fmtInt(stats.observed)} observed review counts, including ${fmtInt(stats.zeros)} zeros; ${fmtInt(stats.missing)} unknown counts excluded from outcomes.`;
   if(!stats.observed){el('p',undefined,parent).textContent='No observed outcomes for this selection. Broaden the filters or choose another year.';return;}
   const tiles=el('div','stat-row',parent);

@@ -4,7 +4,7 @@ import { getLifecycleYears, selectedLifecycle } from './lifecycle-data';
 import { getResearchIndex, getResearchYears, hydrateGames } from './research-data';
 import { selectCohort, csvCell } from './core/cohorts';
 import { summarizeLifecycle, lifecycleExclusion } from './core/lifecycle';
-import { labeledSelect, action, downloadCsv, renderGameTable } from './research-ui';
+import { labeledSelect, action, downloadCsv, renderExposureNote, renderGameTable } from './research-ui';
 import { el, fmtInt, fmtPct } from './format';
 import { multiLineChart, tableTwin, SERIES_1, SERIES_2, SERIES_3 } from './charts';
 
@@ -37,6 +37,7 @@ export async function initLifecycle(root:HTMLElement):Promise<void>{
         const selected=selectCohort(games,state.filter),records=selectedLifecycle(selected,data),byId=new Map(records.map(r=>[r.appid,r]));
         const h=Number(horizon.value),summary=summarizeLifecycle(records,h,data.asOf,getReviewThreshold()),eligibleIds=new Set(summary.eligible.map(r=>r.appid));
         host.replaceChildren();shared.publish(state,{horizon:horizon.value,chart:mode.value});
+        renderExposureNote(host,games,state.filter);
         status.textContent=`${fmtInt(summary.n)} of ${fmtInt(selected.length)} selected games have validated H${h} observations. ${fmtInt(selected.length-summary.n)} excluded. Eligibility is evaluated at the snapshot date ${data.asOf.slice(0,10)}.`;
         el('h2',undefined,host).textContent='Coverage and release-anchor validation';
         tableTwin(host,['Eligibility','Games'],[['Eligible at every plotted month',summary.n],...Object.entries(summary.excluded).map(([reason,n])=>[REASONS[reason]??reason,n])]);

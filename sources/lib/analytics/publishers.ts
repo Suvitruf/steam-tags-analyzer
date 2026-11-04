@@ -2,7 +2,7 @@ import { cohortControls } from './cohort-controls';
 import { getResearchIndex, getResearchYears, getResearchShard } from './research-data';
 import { fetchPopulation, populationPath } from './game-type';
 import { el, fmtInt, fmtPct } from './format';
-import { action, labeledInput, downloadGames, renderGameTable } from './research-ui';
+import { action, labeledInput, downloadGames, exposureNoteText, renderGameTable } from './research-ui';
 import { tableTwin, horizontalBars } from './charts';
 import { selectCohort, type ResearchGame } from './core/cohorts';
 import type { CohortState } from './core/cohort-state';
@@ -69,6 +69,7 @@ export async function initPublishers(root:HTMLElement){
         const next=controls.read(),games=await getResearchYears(index,next.from,next.to);if(request!==sequence)return;
         state=next;selected=selectCohort(games,state.filter);cohort=publishersInCohort(directory,selected);
         status.textContent=`${fmtInt(selected.length)} selected games; ${fmtInt(cohort.publishers.length)} publisher-name groups. ${fmtInt(directory.unknown)} released catalog games have no usable publisher name overall.`;
+        const exposure=exposureNoteText(games,state.filter);if(exposure)status.textContent+=` ${exposure}`;
         controls.publish(state,chosen?{publisher:chosen}:{});renderDirectory();
         const entry=cohort.publishers.find(p=>p.key===chosen);
         if(entry)await openPortfolio(entry);else if(chosen)el('p',undefined,portfolio).textContent='The publisher in this link has no titles in the current cohort. Choose another publisher or broaden the filters.';

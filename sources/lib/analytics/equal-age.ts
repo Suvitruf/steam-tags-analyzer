@@ -4,7 +4,7 @@ import type { ResearchGame } from './core/cohorts';
 import type { LifecycleFile } from './core/lifecycle';
 import { el, fmtPct } from './format';
 import { tableTwin, columnChart, SERIES_1 } from './charts';
-import { action, downloadCsv } from './research-ui';
+import { action, downloadCsv, renderExposureNote } from './research-ui';
 import { csvCell } from './core/cohorts';
 import { selectCohort } from './core/cohorts';
 import { cohortControls } from './cohort-controls';
@@ -24,7 +24,7 @@ export async function initEqualAgeTrends(root:HTMLElement){
       const request=++sequence;controls.submit.disabled=true;host.textContent='Loading equal-age history coverage…';
       try{
         const state=controls.read(),[games,data]=await Promise.all([getResearchYears(index,state.from,state.to),getLifecycleYears(index,state.from,state.to)]);
-        if(request!==sequence)return;host.replaceChildren();controls.publish(state);renderEqualAge(host,selectCohort(games,state.filter),data);
+        if(request!==sequence)return;host.replaceChildren();controls.publish(state);renderExposureNote(host,games,state.filter);renderEqualAge(host,selectCohort(games,state.filter),data);
       }catch(e){if(request===sequence)host.textContent=`Equal-age outcomes unavailable: ${(e as Error).message}`;}
       finally{if(request===sequence)controls.submit.disabled=false;}
     }

@@ -3,7 +3,7 @@ import { getReviewThreshold } from './review-threshold';
 import { cohortControls } from './cohort-controls';
 import { getResearchIndex, getResearchYears } from './research-data';
 import { el, fmtInt, fmtPct } from './format';
-import { action, downloadGames, labeledSelect, renderCohortSummary, renderGameTable } from './research-ui';
+import { action, downloadGames, labeledSelect, renderCohortSummary, renderExposureNote, renderGameTable } from './research-ui';
 import { DEFAULT_FILTER, selectCohort, summarizeCohort, type ResearchGame } from './core/cohorts';
 import { ACCESSIBILITY, CORE_FEATURES, PRICE_LABELS, comboGroups, featureComparison, outcome, pricing, concentration, groupByTag } from './core/insights';
 import { columnChart, scatterChart, tableTwin, horizontalBars, SERIES_1, SERIES_2 } from './charts';
@@ -89,6 +89,7 @@ async function initFilteredInsights(root:HTMLElement,view:'features'|'prices'){
       try{
         const state=controls.read(),all=await getResearchYears(index,state.from,state.to);if(request!==sequence)return;
         selected=selectCohort(all,state.filter);host.replaceChildren();controls.publish(state);
+        renderExposureNote(host,all,state.filter);
         status.textContent=`${fmtInt(selected.length)} selected games from ${state.from} through ${state.to}; ${fmtInt(all.length)} games before cohort filters. Unknown-year games are outside this view.`;
         if(view==='features')renderFeatures(host,selected);else renderPrices(host,selected);
         openTables(host);csv.disabled=false;

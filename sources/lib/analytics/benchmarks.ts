@@ -5,7 +5,7 @@ import { renderEqualAge } from './equal-age';
 import { getResearchIndex, getResearchYears, hydrateGames } from './research-data';
 import { el, fmtInt } from './format';
 import { labeledSelect, action, downloadGames, renderCohortSummary, renderGameTable } from './research-ui';
-import { DEFAULT_FILTER, selectCohort, summarizeCohort, type ResearchGame, type CohortFilter } from './core/cohorts';
+import { DEFAULT_FILTER, selectCohort, summarizeCohort, type ResearchGame, type CohortFilter, ageFilterActive } from './core/cohorts';
 import { tableTwin } from './charts';
 import { renderConcentration, renderReception } from './cohort-insights';
 
@@ -13,7 +13,7 @@ export async function initBenchmarks(root: HTMLElement): Promise<void> {
   try {
     const threshold=getReviewThreshold();
     const index=await getResearchIndex();root.replaceChildren();
-    el('p','analytics-intro',root).textContent='Choose a comparison group of released games. Low-review and zero-review games are included by default. Each year loads separately; no model or full database is required.';
+    el('p','analytics-intro',root).textContent='Choose a comparison group of released games. Low-review and zero-review games are included by default. Set a months-since-release window to compare games with similar time on sale; the equal-age panels below go further and hold the observation horizon fixed. Each year loads separately; no model or full database is required.';
     const controls=cohortControls(root,index),{form,submit}=controls;
     const error=el('p','coverage-warning',root);error.setAttribute('role','alert');
     const actions=el('div','analytics-controls',root),host=el('div',undefined,root),comparison=el('div',undefined,root);
@@ -48,9 +48,10 @@ export async function initBenchmarks(root: HTMLElement): Promise<void> {
         void getLifecycleYears(index,state.from,state.to).then(data=>{
           if(request!==seq)return;equalAge.replaceChildren();renderEqualAge(equalAge,selected,data);
         }).catch(e=>{if(request===seq)equalAge.textContent=`Equal-age outcomes unavailable: ${(e as Error).message}`;});
-        renderCohortSummary(host,selected);
+        renderCohortSummary(host,selected,undefined,{loaded,filter:current});
         renderConcentration(host,selected);renderReception(host,selected);
-        const variants=[['Current',current],['Top-five tags',{...current,rank:5}],['Any tag rank',{...current,rank:null}],['All review counts',{...current,rated:false}],['Ten reviews or more',{...current,rated:true}]] as Array<[string,CohortFilter]>;
+        const variants:Array<[string,CohortFilter]>=[['Current',current],['Top-five tags',{...current,rank:5}],['Any tag rank',{...current,rank:null}],['All review counts',{...current,rated:false}],['Ten reviews or more',{...current,rated:true}]];
+        if(ageFilterActive(current))variants.push(['Any months since release',{...current,ageMin:null,ageMax:null}]);
         const sensitivity=el('section','viz-section',host);el('h2',undefined,sensitivity).textContent='Sensitivity to cohort rules';
         tableTwin(sensitivity,['Rule','Selected','Observed',`Reached ${threshold} reviews`],variants.map(([name,f])=>{const s=summarizeCohort(selectCohort(loaded,f),threshold);return[name,s.selected,s.observed,`${s.thresholds.find(t=>t.threshold===threshold)!.hits} / ${s.observed}`];}));
         el('h2',undefined,host).textContent='Games in this cohort';
