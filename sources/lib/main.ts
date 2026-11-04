@@ -4,6 +4,7 @@ import { listModels, DEFAULT_MODEL_KEY } from './llm/models';
 import type { RecommendationInput, RecommendationOutput } from './types';
 import { ensureDatabase, ensureRanker, ensureEmbeddingModel } from './runtime';
 import { $, escapeHtml, tagPageUrl, renderSimilarGames } from './ui/helpers';
+import { ProgressBar, modelProgressHandler } from './ui/progress';
 import { initAuditPage } from './audit/ui';
 
 import { STEAM_PROXY_URL } from './config';
@@ -23,17 +24,14 @@ const state: AppState = {
   analyzing: false,
 };
 
+// Mounted in #progress once buildUI() has rendered it.
+let progress = new ProgressBar(null);
+
 function setStatus(message: string, type: 'info' | 'error' | 'success' = 'info'): void {
   const el = $('#status');
   if (!el) return;
   el.textContent = message;
   el.className = `status status-${type}`;
-}
-
-function setProgress(label: string, percent?: number): void {
-  const el = $('#progress');
-  if (!el) return;
-  el.textContent = percent !== undefined ? `${label} (${percent.toFixed(0)}%)` : label;
 }
 
 function renderResults(output: RecommendationOutput): void {
@@ -224,17 +222,19 @@ async function handleAnalyze(): Promise<void> {
   const model = state.model;
 
   try {
-    // Both are memoized per model (runtime.ts): instant when already loaded.
+    // Both are memoized per model (runtime.ts): instant when already loaded,
+    // and the progress bar only appears when something really downloads.
     setStatus(`Loading ranker (${model})...`);
-    await ensureRanker(model);
+    await ensureRanker(model, (loaded, total) => progress.set(`Downloading ranker (${model})`, loaded, total));
 
     setStatus(`Loading embedding model (${model})...`);
-    await ensureEmbeddingModel(model, (p) => {
-      if (p.progress !== undefined) setProgress('Loading model', p.progress);
-    });
+    await ensureEmbeddingModel(model, modelProgressHandler(progress, model));
+    progress.hide();
 
-    const onProgress: RecommendationProgressCallback = (stage, detail) => {
+    const onProgress: RecommendationProgressCallback = (stage, detail, bytes) => {
       setStatus(`${stage}${detail ? ` — ${detail}` : ''}`, 'info');
+      if (bytes) progress.set('Downloading game index', bytes.loaded, bytes.total);
+      else progress.hide();
     };
 
     const result = await recommend(input, onProgress, model);
@@ -252,7 +252,7 @@ async function handleAnalyze(): Promise<void> {
   } finally {
     state.analyzing = false;
     if (btn) btn.disabled = false;
-    setProgress('');
+    progress.hide();
   }
 }
 
@@ -320,10 +320,15 @@ async function init(): Promise<void> {
   if (!$('#analyzer-app')) return;
 
   buildUI();
+  progress = new ProgressBar($('#progress'));
 
   try {
     setStatus('Loading database...');
-    await ensureDatabase();
+    await ensureDatabase(e => {
+      if (e.phase === 'download') progress.set('Downloading database', e.loaded, e.total);
+      else progress.busy('Opening database');
+    });
+    progress.hide();
     state.dbLoaded = true;
 
     // Ranker and embedding model are loaded lazily on first analyze, per the
@@ -364,6 +369,7 @@ async function init(): Promise<void> {
     const appidInput = $('#appid') as HTMLInputElement | null;
     appidInput?.addEventListener('change', () => { void handleAppIdLookup(); });
   } catch (err) {
+    progress.hide();
     setStatus(`Failed to load database: ${(err as Error).message}`, 'error');
     console.error(err);
   }

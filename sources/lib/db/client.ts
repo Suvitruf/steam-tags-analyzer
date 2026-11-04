@@ -1,20 +1,27 @@
 import initSqlJs, { Database } from 'sql.js';
 import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
+import { fetchBytes } from '../fetch-progress';
 
 let db: Database | null = null;
 
-export async function loadDatabase(dbUrl: string): Promise<Database> {
+export type DatabaseLoadEvent =
+  | { phase: 'download'; loaded: number; total: number | null }
+  | { phase: 'open' };
+export type DatabaseLoadProgress = (event: DatabaseLoadEvent) => void;
+
+export async function loadDatabase(dbUrl: string, onProgress?: DatabaseLoadProgress): Promise<Database> {
   const SQL = await initSqlJs({
     locateFile: () => sqlWasmUrl,
   });
 
-  const response = await fetch(dbUrl);
-  if (!response.ok) {
-    throw new Error(`Failed to load database: ${response.status} ${response.statusText}`);
-  }
-
-  const buffer = await response.arrayBuffer();
-  db = new SQL.Database(new Uint8Array(buffer));
+  const bytes = await fetchBytes(
+    dbUrl,
+    onProgress && ((loaded, total) => onProgress({ phase: 'download', loaded, total })),
+    'database'
+  );
+  // sql.js adopts the buffer without copying; the first queries pay the parse.
+  onProgress?.({ phase: 'open' });
+  db = new SQL.Database(bytes);
   return db;
 }
 

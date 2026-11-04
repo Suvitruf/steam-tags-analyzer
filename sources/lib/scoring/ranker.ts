@@ -1,3 +1,5 @@
+import { fetchBytes, type ByteProgress } from '../fetch-progress';
+
 interface LeafNode {
   v: number;
 }
@@ -22,12 +24,9 @@ export interface RankerModel {
 
 let model: RankerModel | null = null;
 
-export async function loadRanker(url: string): Promise<void> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to load ranker: ${response.status}`);
-  }
-  model = await response.json();
+export async function loadRanker(url: string, onProgress?: ByteProgress): Promise<void> {
+  const bytes = await fetchBytes(url, onProgress, 'ranker');
+  model = JSON.parse(new TextDecoder().decode(bytes));
 }
 
 export function getRanker(): RankerModel {

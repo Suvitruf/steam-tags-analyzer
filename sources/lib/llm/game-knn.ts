@@ -5,6 +5,7 @@
 // the same PCA it carries, and does a brute-force cosine kNN over ~78k games.
 // Neighbor tags/names/reviews come from the SQLite DB the analyzer already has,
 // so the blob only carries appids + int8 vectors.
+import { fetchBytes, type ByteProgress } from '../fetch-progress';
 
 export interface GameVectors {
   count: number;
@@ -19,10 +20,11 @@ export interface GameVectors {
 
 const MAGIC = 0x47564543; // "GVEC" little-endian as read below
 
-export async function loadGameVectors(url: string): Promise<GameVectors> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to load game vectors: ${res.status}`);
-  const buf = await res.arrayBuffer();
+export async function loadGameVectors(url: string, onProgress?: ByteProgress): Promise<GameVectors> {
+  const bytes = await fetchBytes(url, onProgress, 'game vectors');
+  // fetchBytes returns views at offset 0; the typed-array views below need
+  // the section offsets to be relative to the ArrayBuffer start.
+  const buf = bytes.byteOffset === 0 ? bytes.buffer : bytes.slice().buffer;
   const dv = new DataView(buf);
 
   // magic is the 4 ASCII bytes "GVEC"

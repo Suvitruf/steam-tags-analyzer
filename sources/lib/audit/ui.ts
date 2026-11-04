@@ -9,6 +9,7 @@ import { STEAM_PROXY_URL } from '../config';
 import {
   $, escapeHtml, fmtReviews, tagPageUrl, storeUrl, parseAppIdInput, renderSimilarGames,
 } from '../ui/helpers';
+import { ProgressBar, modelProgressHandler } from '../ui/progress';
 import type { TagRecommendation } from '../types';
 
 const BUCKET_LABEL: Record<AuditBucket, string> = {
@@ -36,18 +37,14 @@ interface LiveApp { name: string; short_description: string; tagIds: number[] }
 
 let modelKey = DEFAULT_MODEL_KEY;
 let running = false;
+// Mounted in #audit-progress once buildUI() has rendered it.
+let progress = new ProgressBar(null);
 
 function setStatus(message: string, type: 'info' | 'error' | 'success' = 'info'): void {
   const el = $('#audit-status');
   if (!el) return;
   el.textContent = message;
   el.className = `status status-${type}`;
-}
-
-function setProgress(label: string, percent?: number): void {
-  const el = $('#audit-progress');
-  if (!el) return;
-  el.textContent = percent !== undefined ? `${label} (${percent.toFixed(0)}%)` : label;
 }
 
 function buildUI(container: HTMLElement): void {
@@ -105,15 +102,18 @@ async function run(appid: number): Promise<void> {
     const live = getAppById(appid) ? undefined : await liveLookup(appid);
 
     setStatus(`Loading ranker (${modelKey})...`);
-    await ensureRanker(modelKey);
+    await ensureRanker(modelKey, (loaded, total) => progress.set(`Downloading ranker (${modelKey})`, loaded, total));
     setStatus(`Loading embedding model (${modelKey})...`);
-    await ensureEmbeddingModel(modelKey, (p) => {
-      if (p.progress !== undefined) setProgress('Loading model', p.progress);
-    });
+    await ensureEmbeddingModel(modelKey, modelProgressHandler(progress, modelKey));
+    progress.hide();
 
     const audit = await auditGame(
       { appid, live },
-      (stage, detail) => setStatus(`${stage}${detail ? ` — ${detail}` : ''}`),
+      (stage, detail, bytes) => {
+        setStatus(`${stage}${detail ? ` — ${detail}` : ''}`);
+        if (bytes) progress.set('Downloading game index', bytes.loaded, bytes.total);
+        else progress.hide();
+      },
       modelKey
     );
     render(audit);
@@ -133,7 +133,7 @@ async function run(appid: number): Promise<void> {
   } finally {
     running = false;
     if (btn) btn.disabled = false;
-    setProgress('');
+    progress.hide();
   }
 }
 
@@ -237,10 +237,15 @@ function render(audit: TagAudit): void {
 
 export async function initAuditPage(container: HTMLElement): Promise<void> {
   buildUI(container);
+  progress = new ProgressBar($('#audit-progress'));
 
   try {
     setStatus('Loading database...');
-    await ensureDatabase();
+    await ensureDatabase(e => {
+      if (e.phase === 'download') progress.set('Downloading database', e.loaded, e.total);
+      else progress.busy('Opening database');
+    });
+    progress.hide();
     setStatus('Ready', 'success');
 
     const btn = $('#audit-btn') as HTMLButtonElement | null;
@@ -274,6 +279,7 @@ export async function initAuditPage(container: HTMLElement): Promise<void> {
       void run(appid);
     }
   } catch (err) {
+    progress.hide();
     setStatus(`Failed to load database: ${(err as Error).message}`, 'error');
     console.error(err);
   }

@@ -148,6 +148,57 @@ body {
   min-height: 1.2em;
 }
 
+/* Download / initialisation bar for the DB, ranker, embedding model and kNN
+   blob (sources/lib/ui/progress.ts). It mounts inside .progress, whose
+   min-height keeps the form from jumping when the bar comes and goes. */
+.load-progress {
+  display: grid;
+  gap: 6px;
+  padding-top: 2px;
+}
+.load-progress-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+.load-progress-label { color: var(--color-text); }
+.load-progress-detail {
+  color: var(--color-surface-light);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.load-progress-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+.load-progress-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 3px;
+  background: var(--color-accent);
+  transition: width 150ms linear;
+}
+.load-progress-indeterminate .load-progress-fill {
+  width: 30%;
+  transition: none;
+  animation: load-progress-sweep 1.4s ease-in-out infinite;
+}
+@keyframes load-progress-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(334%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .load-progress-indeterminate .load-progress-fill {
+    animation: none;
+    width: 100%;
+    opacity: 0.4;
+  }
+}
+
 .analyzer-form {
   background: var(--color-surface);
   padding: 24px;

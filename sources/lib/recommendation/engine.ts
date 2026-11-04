@@ -30,7 +30,13 @@ import { DEFAULT_MODEL_KEY } from '../llm/models';
 import { GAME_VECTOR_MODELS, gameVectorsUrl } from '../config';
 import { predict, type FeatureVector, featureVectorToArray } from '../scoring/ranker';
 
-export type RecommendationProgressCallback = (stage: string, detail?: string) => void;
+// `bytes` accompanies stages that download something (today only the game-vector
+// blob on its first use per model) so the UI can draw a real progress bar.
+export type RecommendationProgressCallback = (
+  stage: string,
+  detail?: string,
+  bytes?: { loaded: number; total: number | null }
+) => void;
 
 const TOP_K_CANDIDATES = 120;
 
@@ -107,10 +113,13 @@ function getCachedTagEmbeddings(modelKey: string): TagEmbedding[] {
 // transient error can be retried next time.
 const gameVectorsCache = new Map<string, Promise<GameVectors>>();
 
-function getCachedGameVectors(modelKey: string): Promise<GameVectors> {
+function getCachedGameVectors(modelKey: string, onProgress?: RecommendationProgressCallback): Promise<GameVectors> {
   let p = gameVectorsCache.get(modelKey);
   if (!p) {
-    p = loadGameVectors(gameVectorsUrl(modelKey));
+    // Only the call that starts the download sees its progress; later callers
+    // share the promise and get the parsed blob.
+    p = loadGameVectors(gameVectorsUrl(modelKey), onProgress && ((loaded, total) =>
+      onProgress('Finding similar games', 'downloading game index', { loaded, total })));
     p.catch(() => gameVectorsCache.delete(modelKey));
     gameVectorsCache.set(modelKey, p);
   }
@@ -172,7 +181,7 @@ export async function recommend(
   if (GAME_VECTOR_MODELS.has(modelKey)) {
     try {
       onProgress?.('Finding similar games');
-      const gv = await getCachedGameVectors(modelKey);
+      const gv = await getCachedGameVectors(modelKey, onProgress);
       const projected = projectQuery(gv, queryEmbedding);
       // A game that is itself in the index is its own nearest neighbor at
       // ~1.0 and would vote for exactly the tags under review (the tag audit)
