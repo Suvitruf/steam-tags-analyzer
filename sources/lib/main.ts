@@ -3,7 +3,8 @@ import { recommend, type RecommendationProgressCallback } from './recommendation
 import { listModels, DEFAULT_MODEL_KEY } from './llm/models';
 import type { RecommendationInput, RecommendationOutput } from './types';
 import { ensureDatabase, ensureRanker, ensureEmbeddingModel } from './runtime';
-import { $, escapeHtml, tagPageUrl, renderSimilarGames } from './ui/helpers';
+import { $, escapeHtml } from './ui/helpers';
+import { renderResultsHtml } from './ui/results';
 import { ProgressBar, modelProgressHandler } from './ui/progress';
 import { initAuditPage } from './audit/ui';
 
@@ -37,71 +38,7 @@ function setStatus(message: string, type: 'info' | 'error' | 'success' = 'info')
 function renderResults(output: RecommendationOutput): void {
   const container = $('#results');
   if (!container) return;
-
-  const segmentInfo = output.segment
-    ? `<p class="segment-info">Segment: <strong>${output.segment.main_tag_name}</strong> (${output.segment.game_count} games) &mdash; Confidence: ${(output.overallConfidence * 100).toFixed(0)}%</p>`
-    : '<p class="segment-info">No segment matched &mdash; showing general recommendations</p>';
-
-  // When analyzing an existing game, show which game and explain the badges.
-  const appInfo = output.analyzedApp
-    ? `<p class="app-info">Analyzing <strong>${output.analyzedApp.name}</strong> &mdash; <span class="badge badge-have">✓ already using</span> marks tags this game already has; the rest are suggestions.</p>`
-    : '';
-
-  // Normalize displayed strength to 0-100 across the shown tags so the
-  // strongest recommendation reads as 100 and the rest are relative to it.
-  // Raw scores stay in the tooltip for debugging.
-  const shown = [...output.primaryTags, ...output.secondaryTags];
-  const maxScore = shown.reduce((m, t) => Math.max(m, t.score), 0) || 1;
-  const currentTags = new Set(output.currentTagIds ?? []);
-
-  container.innerHTML = `
-    ${appInfo}
-    ${segmentInfo}
-    <div class="results-grid">
-      <div class="result-section result-primary">
-        <h3>Recommended Primary Tags</h3>
-        ${renderTagList(output.primaryTags, 'primary', maxScore, currentTags)}
-      </div>
-      <div class="result-section result-secondary">
-        <h3>Secondary Tags</h3>
-        ${renderTagList(output.secondaryTags, 'secondary', maxScore, currentTags)}
-      </div>
-      <div class="result-section result-avoid">
-        <h3>Tags to Avoid</h3>
-        ${renderTagList(output.avoidTags, 'avoid', maxScore, currentTags)}
-      </div>
-    </div>
-    ${renderSimilarGames(output.similarGames)}
-  `;
-}
-
-function renderTagList(tags: RecommendationOutput['primaryTags'], type: string, maxScore: number, currentTags: Set<number>): string {
-  if (tags.length === 0) return '<p class="no-tags">No tags in this category</p>';
-
-  return `<ol class="tag-list tag-list-${type}">
-    ${tags.map((t) => {
-      const strength = Math.round((t.score / maxScore) * 100);
-      const haveBadge = currentTags.has(t.tagId)
-        ? ' <span class="badge badge-have" title="This game already uses this tag">✓ already using</span>'
-        : '';
-      return `
-      <li class="tag-item">
-        <div class="tag-header">
-          <span class="tag-name"><a class="tag-name-link" href="${tagPageUrl(t.tagId, t.tag)}" title="Open tag stats: distribution, trends, combos">${t.tag}</a>${haveBadge}</span>
-          <span class="tag-score" title="Strength: ${strength}/100 · raw ${t.score.toFixed(3)} · relevance ${(t.relevance * 100).toFixed(0)}% · lift ${t.successLift.toFixed(1)}x">
-            ${type === 'avoid' ? '⚠' : strength}
-          </span>
-        </div>
-        <p class="tag-explanation">${t.explanation}</p>
-        ${t.exemplarGames.length > 0
-          ? `<p class="tag-exemplars">Examples: ${t.exemplarGames.map(g =>
-              `<a class="exemplar-link" href="https://store.steampowered.com/app/${g.appid}/" target="_blank" rel="noopener noreferrer">${g.name}</a>`
-            ).join(', ')}</p>`
-          : ''}
-      </li>
-    `;
-    }).join('')}
-  </ol>`;
+  container.innerHTML = renderResultsHtml(output);
 }
 
 function populateMainTagDropdown(): void {

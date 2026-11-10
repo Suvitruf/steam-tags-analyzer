@@ -6,10 +6,15 @@ export function $(selector: string): HTMLElement | null {
   return document.querySelector(selector);
 }
 
+// Pure (no DOM) so the Node render test can run it, and quote-safe so it is
+// correct inside attribute values too: the old textContent/innerHTML round
+// trip left " and ' alone, which is wrong for title="…" with Steam strings.
+const HTML_ESCAPES: Record<string, string> = {
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+};
+
 export function escapeHtml(s: string): string {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
+  return String(s).replace(/[&<>"']/g, c => HTML_ESCAPES[c]);
 }
 
 export function fmtReviews(n: number): string {
