@@ -52,7 +52,7 @@ export function renderSimilarGames(
   const items = games.map(g =>
     `<li class="similar-game">
       <a href="${storeUrl(g.appid)}" target="_blank" rel="noopener noreferrer">${escapeHtml(g.name)}</a>
-      <span class="similar-game-meta">${(g.similarity * 100).toFixed(0)}% match · ${fmtReviews(g.reviews)} reviews</span>
+      <span class="similar-game-meta">similarity ${g.similarity.toFixed(2)} · ${fmtReviews(g.reviews)} reviews</span>
     </li>`
   ).join('');
   return `

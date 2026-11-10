@@ -121,7 +121,8 @@ export interface RecommendationOutput {
   secondaryTags: TagRecommendation[];
   avoidTags: TagRecommendation[];
   segment: Segment | null;
-  overallConfidence: number;
+  /** The segment came from the top-ranked candidate, not from the user or the game's own tags. */
+  segmentInferred: boolean;
   /** Set when analyzing an existing game by App ID. */
   analyzedApp?: { appid: number; name: string } | null;
   /** Tag IDs the analyzed game already uses (for "already using" badges). */

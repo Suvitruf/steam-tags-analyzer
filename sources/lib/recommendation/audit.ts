@@ -355,7 +355,7 @@ export async function auditGame(
   const thinReason = !output.neighborEvidenceAvailable
     ? 'Similar-game tag data is unavailable or incomplete. This audit uses the description and store features; suspicious-tag judgments and avoid suggestions are withheld.'
     : topSimilarity < AUDIT.THIN_SIGNAL_SIM
-      ? `The nearest game is only a ${pct(topSimilarity)} match, so this description gives the engine little to go on.`
+      ? `The nearest game is only a ${topSimilarity.toFixed(2)} cosine match, so this description gives the engine little to go on.`
       : top3Unsupported
         ? 'None of the three most-voted tags is backed by the description or by similar games — the blurb likely describes story or theme rather than gameplay.'
         : null;

@@ -142,7 +142,7 @@ function renderBadge(bucket: AuditBucket): string {
 }
 
 function renderTagRow(t: AuditedTag, neighborEvidenceAvailable: boolean): string {
-  const tooltip = `relevance ${(t.similarity * 100).toFixed(0)}% · ` +
+  const tooltip = `similarity ${t.similarity.toFixed(2)} · ` +
     (neighborEvidenceAvailable ? `neighbor vote ${(t.neighborVote * 100).toFixed(0)}%` : 'similar-game tag data unavailable or incomplete') +
     (t.verifiedBy.length ? ` · store features: ${t.verifiedBy.join(', ')}` : '');
   const name = t.active
@@ -158,7 +158,7 @@ function renderTagRow(t: AuditedTag, neighborEvidenceAvailable: boolean): string
 
 function renderRecList(tags: TagRecommendation[], type: 'add' | 'avoid'): string {
   if (tags.length === 0) {
-    return `<p class="no-tags">${type === 'add' ? 'Nothing obvious is missing.' : 'No tempting-but-wrong tags for this game.'}</p>`;
+    return `<p class="no-tags">${type === 'add' ? 'Nothing obvious is missing.' : 'No high-lift segment tags unsupported by this description.'}</p>`;
   }
   const maxScore = tags.reduce((m, t) => Math.max(m, t.score), 0) || 1;
   return `<ol class="tag-list tag-list-${type}">
@@ -227,13 +227,13 @@ function render(audit: TagAudit): void {
       </div>
       <div class="result-section result-avoid">
         <h3>Tags to avoid</h3>
-        <p class="similar-games-note">Strong in the segment, wrong for this game.</p>
+        <p class="similar-games-note">Strong in the segment, unsupported by this description — confirm before using.</p>
         ${audit.signal.neighborEvidenceAvailable ? renderRecList(audit.avoid, 'avoid') : '<p class="no-tags">Avoid suggestions are unavailable until similar-game tag data is available.</p>'}
       </div>
     </div>
     ${renderSimilarGames(audit.similarGames, {
       title: 'Games most like this one',
-      note: `Nearest games to the store description (the game itself excluded) — their tags are the neighbor vote. Threshold for "thin": ${(AUDIT.THIN_SIGNAL_SIM * 100).toFixed(0)}% top match.`,
+      note: `Nearest games to the store description (the game itself excluded) — their tags are the neighbor vote. Similarity is a cosine, not a match probability; "thin" below ${AUDIT.THIN_SIGNAL_SIM.toFixed(2)} for the nearest game.`,
     })}
   `;
 }

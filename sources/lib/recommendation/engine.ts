@@ -473,7 +473,7 @@ export async function recommend(
   // fit this game (see AVOID_* constants for why they're sourced here and not
   // from the similarity candidates). Typical catches: Anime/Cute for a dark
   // fantasy deckbuilder, Multiplayer for a solo cozy pitch, Sexual Content in
-  // Horror — high lift in the segment, wrong audience for this description.
+  // Horror — high lift in the segment, nothing in this description to support it.
   if (segment) {
     const shown = new Set([...primary, ...secondary].map(r => r.tagId));
     const avoidCandidates: Array<{ ts: TagScore; shrunk: number; sim: number }> = [];
@@ -498,20 +498,17 @@ export async function recommend(
         relevance: sim,
         successLift: ts.success_lift,
         confidence: ts.confidence,
+        // Observational: lift is association within the segment, not the
+        // effect of adding the tag, and low similarity is absence of support,
+        // not contradiction.
         explanation:
           `"${ts.tag_name}" appears ${ts.success_lift.toFixed(1)}x more often among top performers in the ` +
-          `${segment.main_tag_name} segment, but it has low relevance to your description — ` +
-          `using it would attract the wrong audience.`,
+          `${segment.main_tag_name} segment, but nothing in your description supports it — ` +
+          `confirm it fits before using it.`,
         exemplarGames: [],
       });
     }
   }
-
-  const overallConfidence = segment
-    ? Math.min(1.0, segment.game_count / 100)
-        * (primary.length > 0 ? 1.0 : 0.5)
-        * (segmentInferred ? 0.8 : 1.0)
-    : 0.3;
 
   onProgress?.('Complete');
 
@@ -520,7 +517,7 @@ export async function recommend(
     secondaryTags: secondary,
     avoidTags: avoid,
     segment,
-    overallConfidence,
+    segmentInferred,
     analyzedApp,
     currentTagIds,
     similarGames,
