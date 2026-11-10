@@ -1,18 +1,47 @@
 // Literal intent only: this does not alter embeddings or prohibit retrieved tags.
 const STOP_WORDS = new Set(['a', 'an', 'the', 'of', 'and', 'to', 'in', 'on', 'for']);
 
-// Bound negation to a clause. Contrast/positive feature markers resume evidence;
-// conjunctions stay inside the exclusion so "no combat or multiplayer" is safe.
-// This deliberately handles common explicit exclusions, not general language inference.
+// Bound negation to its scope, not to the whole clause. Clause boundaries
+// (sentence punctuation and contrast/positive-feature markers) resume
+// evidence; inside a clause the scope runs from the negation marker to the
+// end of the clause, or to the first comma that starts a new statement.
+// A bare noun list after a comma ("no combat, crafting or farming") stays
+// negated; a determiner, pronoun or resuming adverb ("no combat, you explore",
+// "not a shooter, more of a stealth game") does not. Words before the marker
+// are kept ("a cozy horror game where you don't fight") unless the marker
+// negates its subject ("multiplayer is not supported", "co-op doesn't exist").
+// This deliberately handles common explicit exclusions, not general language
+// inference; the original description still feeds the embedding model.
+// Mirrored in the offline evaluation pipeline's intent parser.
+const CLAUSE_BOUNDARY = /[.!?;\n]|\b(?:but|however|yet|with|featuring|only|instead|rather|though|although|whereas|except)\b/;
+const NEGATION = /\b(?:no|not|without|never|lacks?|neither|isn't|aren't|wasn't|weren't|doesn't|don't|won't|can't|cannot)\b/;
+// Forms whose subject is the negated thing, so the words before the marker go too.
+const SUBJECT_NEGATED = /^(?:isn't|aren't|wasn't|weren't|never|not\s+(?:supported|included|available|required|present|featured|offered|possible)|(?:doesn't|don't|won't|can't|cannot)\s+(?:exist|work|apply|happen|occur|appear|matter))\b/;
+const COPULA_BEFORE = /\b(?:is|are|was|were)\s*$/;
+// A comma followed by the start of a new statement ends the negated span.
+const RESUMES_AFTER_COMMA = /,\s*(?:(?:and|or|so)\s+)?(?:a|an|the|this|that|these|those|it|its|there|you|your|we|our|players?|more|just|then|now|every|each|all)\b/;
+
 export function normalizeIntentDescription(description: string): string {
   const text = description.toLowerCase()
     .replace(/['’]/g, "'")
     .replace(/\bnot only\b/g, ' ');
-  return text.split(/[.!?;\n]|\b(?:but|however|yet|with|featuring|only)\b/)
-    .map(clause => normalizeText(clause.replace(
-      /^.*\b(?:no|not|without|never|lacks?|neither|isn't|aren't|doesn't|don't|won't|can't|cannot)\b.*$/, ''
-    )))
+  return text.split(CLAUSE_BOUNDARY)
+    .flatMap(positiveParts)
+    .map(normalizeText)
     .filter(Boolean).join(' | ');
+}
+
+// The spans of one clause that carry positive evidence, in order. Each span is
+// normalized separately so a tag phrase can't be assembled across a gap.
+function positiveParts(clause: string): string[] {
+  const m = NEGATION.exec(clause);
+  if (!m) return [clause];
+  const before = clause.slice(0, m.index);
+  const fromMarker = clause.slice(m.index);
+  const subjectNegated = SUBJECT_NEGATED.test(fromMarker) || (m[0] === 'not' && COPULA_BEFORE.test(before));
+  const resume = RESUMES_AFTER_COMMA.exec(fromMarker);
+  const rest = resume ? fromMarker.slice(resume.index + 1) : '';
+  return [subjectNegated ? '' : before, ...positiveParts(rest)];
 }
 
 function normalizeText(s: string): string {
