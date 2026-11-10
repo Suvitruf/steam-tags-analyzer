@@ -5,7 +5,7 @@ import { auditGame, AUDIT, type TagAudit, type AuditedTag, type AuditBucket } fr
 import { ensureDatabase, ensureRanker, ensureEmbeddingModel } from '../runtime';
 import { listModels, DEFAULT_MODEL_KEY } from '../llm/models';
 import { getAppById } from '../db/queries';
-import { STEAM_PROXY_URL } from '../config';
+import { fetchLiveApp, liveLookupEnabled, type LiveApp } from '../live';
 import {
   $, escapeHtml, fmtReviews, tagPageUrl, storeUrl, parseAppIdInput, renderSimilarGames,
 } from '../ui/helpers';
@@ -32,8 +32,6 @@ const BUCKET_HELP: Record<AuditBucket, string> = {
 
 // Legend/summary order: good news first, problems last.
 const BUCKET_ORDER: AuditBucket[] = ['identity', 'feature', 'neutral', 'weak', 'suspicious', 'retired'];
-
-interface LiveApp { name: string; short_description: string; tagIds: number[] }
 
 let modelKey = DEFAULT_MODEL_KEY;
 let running = false;
@@ -72,34 +70,45 @@ function buildUI(container: HTMLElement): void {
         <label for="audit-appid">Steam App ID or store URL</label>
         <input type="text" id="audit-appid" placeholder="e.g. 1245620 or https://store.steampowered.com/app/1245620/">
       </div>
-      <button type="submit" id="audit-btn" class="btn-analyze" disabled>Loading...</button>
+      <div class="form-actions">
+        <button type="submit" id="audit-btn" class="btn-analyze" disabled>Loading...</button>
+        ${liveLookupEnabled
+          ? `<button type="button" id="audit-refresh-btn" class="btn-secondary" disabled
+               title="Fetch the page's current tags and store features from Steam and audit those instead of the dataset snapshot">Refresh from Steam</button>`
+          : ''}
+      </div>
     </form>
 
     <div id="audit-results" class="results"></div>
   `;
 }
 
-async function liveLookup(appid: number): Promise<LiveApp> {
-  if (!STEAM_PROXY_URL) {
-    throw new Error(`App ID ${appid} isn't in the dataset (live lookup not configured)`);
+function setButtonsDisabled(disabled: boolean): void {
+  for (const id of ['#audit-btn', '#audit-refresh-btn']) {
+    const b = $(id) as HTMLButtonElement | null;
+    if (b) b.disabled = disabled;
   }
-  setStatus(`Looking up App ID ${appid} on Steam…`);
-  const res = await fetch(`${STEAM_PROXY_URL}/app/${appid}`);
-  if (!res.ok) throw new Error(`Steam lookup failed for App ID ${appid} (${res.status})`);
-  const data = await res.json() as { name: string; short_description: string; tags: Array<{ tagid: number }> };
-  return { name: data.name, short_description: data.short_description ?? '', tagIds: (data.tags ?? []).map(t => t.tagid) };
 }
 
-async function run(appid: number): Promise<void> {
+// `fresh`: fetch the page's current tags and store features from Steam even
+// when the dataset has this game, and audit those instead of the snapshot.
+async function run(appid: number, fresh = false): Promise<void> {
   if (running) return;
   running = true;
-  const btn = $('#audit-btn') as HTMLButtonElement | null;
-  if (btn) btn.disabled = true;
+  setButtonsDisabled(true);
   const results = $('#audit-results');
   if (results) results.innerHTML = '';
 
   try {
-    const live = getAppById(appid) ? undefined : await liveLookup(appid);
+    const inDataset = getAppById(appid) !== null;
+    if (!inDataset && !liveLookupEnabled) {
+      throw new Error(`App ID ${appid} isn't in the dataset (live lookup not configured)`);
+    }
+    let live: LiveApp | undefined;
+    if (fresh || !inDataset) {
+      setStatus(fresh ? `Fetching the current store page for App ID ${appid} from Steam…` : `Looking up App ID ${appid} on Steam…`);
+      live = await fetchLiveApp(appid, { fresh });
+    }
 
     setStatus(`Loading ranker (${modelKey})...`);
     await ensureRanker(modelKey, (loaded, total) => progress.set(`Downloading ranker (${modelKey})`, loaded, total));
@@ -120,6 +129,8 @@ async function run(appid: number): Promise<void> {
     // Shareable link to this exact audit.
     const url = new URL(location.href);
     url.searchParams.set('appid', String(appid));
+    if (fresh) url.searchParams.set('live', '1');
+    else url.searchParams.delete('live');
     history.replaceState(null, '', url);
     setStatus('Audit complete', 'success');
   } catch (err) {
@@ -132,9 +143,33 @@ async function run(appid: number): Promise<void> {
     console.error(err);
   } finally {
     running = false;
-    if (btn) btn.disabled = false;
+    setButtonsDisabled(false);
     progress.hide();
   }
+}
+
+// Where the audited tags came from, and how old they are.
+function sourceNote(audit: TagAudit): string {
+  const features = audit.featuresKnown ? '' : '; store features unavailable';
+  if (audit.app.live && !audit.app.inDataset) return `(live from Steam, not in the dataset${features})`;
+  if (audit.app.live) return `(current store page, fetched from Steam just now${features})`;
+  const date = audit.snapshotCollectedAt?.slice(0, 10);
+  return `(dataset snapshot${date ? ` from ${escapeHtml(date)}` : ''}${features})`;
+}
+
+// A live refresh of a dataset game: what changed on the page since the snapshot.
+function snapshotNote(audit: TagAudit): string {
+  if (!audit.liveDiff) return '';
+  const date = audit.snapshotCollectedAt?.slice(0, 10);
+  const since = `since the dataset snapshot${date ? ` of ${escapeHtml(date)}` : ''}`;
+  const { added, removed } = audit.liveDiff;
+  if (added.length === 0 && removed.length === 0) {
+    return `<div class="audit-note audit-diff"><strong>No tag changes</strong> ${since}.</div>`;
+  }
+  const parts: string[] = [];
+  if (added.length) parts.push(`added ${added.map(escapeHtml).join(', ')}`);
+  if (removed.length) parts.push(`dropped ${removed.map(escapeHtml).join(', ')}`);
+  return `<div class="audit-note audit-diff"><strong>Changed ${since}:</strong> ${parts.join('; ')}.</div>`;
 }
 
 function renderBadge(bucket: AuditBucket): string {
@@ -206,9 +241,10 @@ function render(audit: TagAudit): void {
 
   container.innerHTML = `
     <p class="app-info">Auditing <strong><a href="${storeUrl(audit.app.appid)}" target="_blank" rel="noopener noreferrer">${escapeHtml(audit.app.name)}</a></strong>
-      ${audit.app.live ? '(live from Steam, not in the dataset — store features unavailable)' : ''}
+      ${sourceNote(audit)}
       &mdash; ${audit.tags.length} tags on the store page, ${segment}.
       <span class="audit-summary">${summary}</span></p>
+    ${snapshotNote(audit)}
     ${thin}
     <div class="result-section audit-section">
       <h3>Current tags, in store order</h3>
@@ -258,15 +294,23 @@ export async function initAuditPage(container: HTMLElement): Promise<void> {
     }
 
     const input = $('#audit-appid') as HTMLInputElement | null;
-    $('#audit-form')?.addEventListener('submit', (e) => {
-      e.preventDefault();
+    const submit = (fresh: boolean) => {
       const appid = parseAppIdInput(input?.value ?? '');
       if (appid === null) {
         setStatus('Enter a Steam App ID or a store page URL', 'error');
         return;
       }
-      void run(appid);
+      void run(appid, fresh);
+    };
+    $('#audit-form')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      submit(false);
     });
+    const refreshBtn = $('#audit-refresh-btn') as HTMLButtonElement | null;
+    if (refreshBtn) {
+      refreshBtn.disabled = false;
+      refreshBtn.addEventListener('click', () => submit(true));
+    }
 
     const modelSelect = $('#audit-model-select') as HTMLSelectElement | null;
     modelSelect?.addEventListener('change', () => {
@@ -274,12 +318,14 @@ export async function initAuditPage(container: HTMLElement): Promise<void> {
       setStatus(`Model set to ${modelKey} — loads on next audit`, 'info');
     });
 
-    // Deep link: /audit?appid=1245620 runs immediately.
-    const prefill = new URLSearchParams(location.search).get('appid');
+    // Deep link: /audit?appid=1245620 runs immediately; &live=1 audits the
+    // current store page instead of the dataset snapshot.
+    const params = new URLSearchParams(location.search);
+    const prefill = params.get('appid');
     const appid = prefill ? parseAppIdInput(prefill) : null;
     if (appid !== null) {
       if (input) input.value = String(appid);
-      void run(appid);
+      void run(appid, params.get('live') === '1' && liveLookupEnabled);
     }
   } catch (err) {
     progress.hide();

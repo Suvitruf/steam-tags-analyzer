@@ -266,6 +266,22 @@ select {
   cursor: not-allowed;
 }
 
+/* Primary action plus an optional secondary one (the audit's "Refresh from Steam"). */
+.form-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.form-actions .btn-analyze { flex: 1 1 200px; width: auto; }
+.btn-secondary {
+  padding: 12px 16px;
+  background: transparent;
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-secondary:hover:not(:disabled) { background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
+.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .results {
   margin-top: 24px;
 }
@@ -650,6 +666,7 @@ nav.analytics-controls { display: flex; flex-wrap: wrap; gap: 8px 16px; }
   background: rgba(255, 152, 0, 0.08); border-left: 3px solid var(--color-warning);
   padding: 0.5rem 0.75rem; margin-bottom: 16px; font-size: 0.85rem;
 }
+.audit-diff { border-left-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 8%, transparent); }
 .audit-grid { grid-template-columns: 1fr 1fr; }
 @media (max-width: 768px) { .audit-grid { grid-template-columns: 1fr; } }
 

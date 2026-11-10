@@ -28,6 +28,9 @@ export const ANALYTICS_BASE = import.meta.env.VITE_ANALYTICS_BASE || `${ASSET_BA
 export const GAME_VECTOR_MODELS = new Set(['gte-base', 'minilm', 'bge-small']);
 export const gameVectorsUrl = (modelKey: string) => `${ASSET_BASE}/data/game-vectors-${modelKey}.bin`;
 
-// Cloudflare Worker base URL for live App ID lookups (games not in the DB).
-// Empty string disables live lookups (local-DB-only).
-export const STEAM_PROXY_URL = '';   // e.g. 'https://steam-tags-proxy.<you>.workers.dev'
+// Cloudflare Worker base URL for live Steam lookups: App IDs
+// the DB lacks, and the audit's "refresh from Steam". Build-time override via
+// VITE_STEAM_PROXY_URL; the default is the deployed Worker on its custom
+// domain. Empty disables live lookups (local-DB-only).
+const DEFAULT_STEAM_PROXY_URL = 'https://steam-tags-api.aapanasik.com';
+export const STEAM_PROXY_URL = String(import.meta.env.VITE_STEAM_PROXY_URL ?? DEFAULT_STEAM_PROXY_URL).replace(/\/+$/, '');

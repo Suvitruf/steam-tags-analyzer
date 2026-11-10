@@ -15,14 +15,9 @@
 // games say this", not "is this true". Multiplayer on a game whose blurb never
 // mentions it looks exactly like a joke tag — which is why store features are
 // checked before anything can be called suspicious.
-import type {
-  CurrentTagSignal,
-  Segment,
-  SimilarGame,
-  TagRecommendation,
-} from '../types';
+import type { CurrentTagSignal, Segment, SimilarGame, TagRecommendation, AppTag } from '../types';
 import { recommend, type RecommendationProgressCallback } from './engine';
-import { getAppById, getTagStats } from '../db/queries';
+import { getAppById, getTagStats, getAppTags, getAppTagsCollectedAt, getTagsByIds } from '../db/queries';
 import { DEFAULT_MODEL_KEY } from '../llm/models';
 
 export type AuditBucket = 'identity' | 'feature' | 'neutral' | 'weak' | 'suspicious' | 'retired';
@@ -142,7 +137,22 @@ export interface AuditedTag extends CurrentTagSignal {
 }
 
 export interface TagAudit {
-  app: { appid: number; name: string; live: boolean };
+  app: {
+    appid: number;
+    name: string;
+    /** Tags, description and categories came from Steam just now, not from the dataset. */
+    live: boolean;
+    /** The dataset has a row for this App ID (even when `live` replaced its snapshot). */
+    inDataset: boolean;
+    /** When the live data was fetched (ISO 8601), if known. */
+    fetchedAt: string | null;
+  };
+  /** Store-feature categories were known, so feature verification and contradiction could run. */
+  featuresKnown: boolean;
+  /** When the dataset last observed this game's tags; null when it has no row. */
+  snapshotCollectedAt: string | null;
+  /** Live tags against the dataset snapshot, by name; only for a live refresh of a dataset game. */
+  liveDiff: { added: string[]; removed: string[] } | null;
   segment: Segment | null;
   /** The game's current tags, store order, classified. */
   tags: AuditedTag[];
@@ -169,8 +179,12 @@ export interface TagAudit {
 
 export interface AuditInput {
   appid: number;
-  /** For a game not in the dataset: what the live Worker lookup returned. */
-  live?: { name: string; short_description: string; tagIds: number[]; categories?: string[] };
+  /**
+   * What a live Steam lookup returned (lib/live.ts): for a game the dataset
+   * lacks, or a refresh of one it has. These tags, description and categories
+   * replace the dataset snapshot.
+   */
+  live?: { name: string; short_description: string; tagIds: number[]; categories?: string[]; fetchedAt?: string | null };
   /** Precomputed description embedding (the Node sanity harness). */
   queryEmbedding?: Float32Array;
 }
@@ -280,6 +294,19 @@ function prevalenceFor(tagIds: number[]): Map<number, number> {
   return out;
 }
 
+// What a live lookup added or dropped relative to the dataset's snapshot of
+// the same page, by name, each side in its own store order.
+function diffAgainstSnapshot(liveIds: number[], snapshot: AppTag[]): { added: string[]; removed: string[] } {
+  const live = new Set(liveIds);
+  const had = new Set(snapshot.map(t => t.tag_id));
+  const addedIds = liveIds.filter(id => !had.has(id));
+  const nameById = new Map(getTagsByIds(addedIds).map(t => [t.tag_id, t.name]));
+  return {
+    added: addedIds.map(id => nameById.get(id) ?? `#${id}`),
+    removed: snapshot.filter(t => !live.has(t.tag_id)).map(t => t.tag_name),
+  };
+}
+
 function listNames(tags: AuditedTag[]): string {
   return tags.map(t => `${t.tag} (#${t.rank})`).join(', ');
 }
@@ -291,7 +318,11 @@ export async function auditGame(
 ): Promise<TagAudit> {
   const app = getAppById(input.appid);
   if (!app && !input.live) throw new Error(`App ID ${input.appid} isn't in the dataset`);
-  const description = (app?.short_description ?? input.live?.short_description ?? '').trim();
+  if (app && input.live && input.live.tagIds.length === 0) {
+    throw new Error('Steam returned no tags for this page right now; audit the dataset snapshot instead');
+  }
+  // Live data describes the page as it is now; the dataset row is a snapshot.
+  const description = (input.live?.short_description || app?.short_description || '').trim();
   if (!description) throw new Error('This game has no store description to audit');
 
   const output = await recommend(
@@ -299,7 +330,7 @@ export async function auditGame(
       description,
       appid: input.appid,
       appName: input.live?.name,
-      currentTagIds: app ? undefined : input.live?.tagIds,
+      currentTagIds: input.live?.tagIds,
       queryEmbedding: input.queryEmbedding,
     },
     onProgress,
@@ -308,7 +339,9 @@ export async function auditGame(
   const signals = output.currentTagSignals ?? [];
   if (signals.length === 0) throw new Error('This game has no tags to audit');
 
-  const categories = parseCategories(app?.categories) ?? input.live?.categories;
+  // Live categories first; a Worker that could not read them falls back to the
+  // dataset's (store features change far less often than tags do).
+  const categories = input.live?.categories ?? parseCategories(app?.categories);
   const ctx: AuditContext = {
     neighborEvidenceAvailable: output.neighborEvidenceAvailable,
     retrievalCutoff: output.retrievalCutoff ?? 0,
@@ -360,12 +393,20 @@ export async function auditGame(
         ? 'None of the three most-voted tags is backed by the description or by similar games — the blurb likely describes story or theme rather than gameplay.'
         : null;
 
+  const snapshotCollectedAt = app ? getAppTagsCollectedAt(input.appid) : null;
+  const liveDiff = app && input.live ? diffAgainstSnapshot(input.live.tagIds, getAppTags(input.appid)) : null;
+
   return {
     app: {
       appid: input.appid,
-      name: app?.name ?? input.live?.name ?? `App ${input.appid}`,
-      live: !app,
+      name: input.live?.name ?? app?.name ?? `App ${input.appid}`,
+      live: input.live !== undefined,
+      inDataset: app !== null,
+      fetchedAt: input.live?.fetchedAt ?? null,
     },
+    featuresKnown: ctx.categories !== undefined,
+    snapshotCollectedAt,
+    liveDiff,
     segment: output.segment,
     tags,
     counts,

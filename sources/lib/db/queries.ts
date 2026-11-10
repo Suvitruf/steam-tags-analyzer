@@ -82,6 +82,15 @@ export function getAppTags(appid: number): AppTag[] {
   );
 }
 
+/** When the dataset last observed this game's tag list (ISO date-time), or null when it has none. */
+export function getAppTagsCollectedAt(appid: number): string | null {
+  const row = queryOne<{ collected_at: string | null }>(
+    `SELECT MAX(collected_at) AS collected_at FROM app_tags WHERE appid = ?`,
+    [appid]
+  );
+  return row?.collected_at ?? null;
+}
+
 /**
  * Which of these tags has Valve retired? Used to warn a developer whose store
  * page still carries a tag that no longer exists in the taxonomy — Valve ships

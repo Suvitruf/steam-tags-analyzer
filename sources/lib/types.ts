@@ -54,7 +54,10 @@ export interface RecommendationInput {
   appid?: number;
   competitorAppids?: number[];
   priceBucket?: string;
-  /** For a live-looked-up game not in the local DB: its name + current tag IDs. */
+  /**
+   * For a game looked up live on Steam: its name + current tag IDs in store
+   * order. When given they replace the dataset's snapshot of that App ID.
+   */
   appName?: string;
   currentTagIds?: number[];
   /**

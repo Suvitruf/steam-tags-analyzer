@@ -280,21 +280,24 @@ export async function recommend(
   if (input.appid) {
     const app = getAppById(input.appid);
     const appTags = getAppTags(input.appid);
-    if (app) {
+    if (input.currentTagIds) {
+      // Tags the caller fetched from Steam just now (a game the dataset lacks,
+      // or a refresh of one it has): they describe the page as it is, so they
+      // win over the dataset's snapshot. Store order, so index = rank.
+      analyzedApp = { appid: input.appid, name: input.appName ?? app?.name ?? `App ${input.appid}` };
+      currentTagIds = input.currentTagIds;
+      currentTagRanks = input.currentTagIds.map((_, i) => i + 1);
+    } else if (app) {
       // Game is in the local dataset.
       analyzedApp = { appid: app.appid, name: app.name };
       currentTagIds = appTags.map(t => t.tag_id);
       currentTagRanks = appTags.map(t => t.rank);
-    } else if (input.currentTagIds) {
-      // Live-looked-up game (not in the dataset): use the data the caller
-      // fetched. The Worker returns tags in store order, so index = rank.
-      analyzedApp = { appid: input.appid, name: input.appName ?? `App ${input.appid}` };
-      currentTagIds = input.currentTagIds;
-      currentTagRanks = input.currentTagIds.map((_, i) => i + 1);
     }
 
-    if (!segment && appTags.length > 0) {
-      const seg = findSegment(appTags[0].tag_id, input.priceBucket);
+    // Pin the segment to the page's leading tag (segment membership is a
+    // top-5 tag, and the first tag is what players see first).
+    if (!segment && currentTagIds.length > 0) {
+      const seg = findSegment(currentTagIds[0], input.priceBucket);
       if (seg) {
         segment = seg;
         tagScoresMap = loadSegmentScores(seg);

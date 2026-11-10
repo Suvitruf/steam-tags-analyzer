@@ -8,7 +8,7 @@ import { renderResultsHtml } from './ui/results';
 import { ProgressBar, modelProgressHandler } from './ui/progress';
 import { initAuditPage } from './audit/ui';
 
-import { STEAM_PROXY_URL } from './config';
+import { fetchLiveApp, liveLookupEnabled } from './live';
 
 interface LiveApp { appid: number; name: string; tagIds: number[] }
 let liveApp: LiveApp | null = null;    // last successful live lookup, if any
@@ -102,19 +102,14 @@ async function handleAppIdLookup(): Promise<void> {
   }
 
   // 2. live lookup via the Worker (if configured)
-  if (!STEAM_PROXY_URL) {
+  if (!liveLookupEnabled) {
     setStatus(`App ID ${id} isn't in the dataset (live lookup not configured)`, 'error');
     return;
   }
   try {
     setStatus(`Looking up App ID ${id} on Steam…`, 'info');
-    const res = await fetch(`${STEAM_PROXY_URL}/app/${id}`);
-    if (!res.ok) {
-      setStatus(`Steam lookup failed for App ID ${id} (${res.status})`, 'error');
-      return;
-    }
-    const data = await res.json() as { name: string; short_description: string; tags: Array<{ tagid: number }> };
-    liveApp = { appid: id, name: data.name, tagIds: (data.tags ?? []).map(t => t.tagid) };
+    const data = await fetchLiveApp(id);
+    liveApp = { appid: id, name: data.name, tagIds: data.tagIds };
     if (desc && data.short_description && !desc.value.trim()) desc.value = data.short_description;
     setStatus(`Live: "${data.name}" — fetched from Steam; its tags will be marked`, 'success');
     showRetiredTagWarning(liveApp.tagIds);
