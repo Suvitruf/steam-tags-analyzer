@@ -221,6 +221,9 @@ function render(audit: TagAudit): void {
         <h3>Consider adding</h3>
         <p class="similar-games-note">Tags the engine recommends for this description that the page doesn't carry.</p>
         ${renderRecList(audit.missing, 'add')}
+        ${audit.missingContradicted.length
+          ? `<p class="similar-games-note">Not suggested: ${audit.missingContradicted.map(t => escapeHtml(t.tag)).join(', ')} — the store's feature list doesn't include what ${audit.missingContradicted.length === 1 ? 'it requires' : 'they require'}.</p>`
+          : ''}
       </div>
       <div class="result-section result-avoid">
         <h3>Tags to avoid</h3>

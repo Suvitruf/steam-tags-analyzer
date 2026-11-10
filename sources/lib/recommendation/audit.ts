@@ -69,27 +69,53 @@ export const AUDIT = {
 } as const;
 
 // Tag → Steam store-feature categories (apps.categories, spelled as Steam
-// does) that make the tag a verified FACT regardless of the description.
-// Structural features only — never genres: "Trading Card Game" is a genre,
-// "Steam Trading Cards" is a store feature, and they must not match.
-const FEATURE_TAG_CATEGORIES: Record<string, string[]> = {
-  'Singleplayer': ['Single-player'],
-  'Multiplayer': ['Multi-player'],
-  'Asynchronous Multiplayer': ['Multi-player'],
-  'Co-op': ['Co-op', 'Online Co-op', 'LAN Co-op', 'Shared/Split Screen Co-op'],
-  'Co-op Campaign': ['Co-op', 'Online Co-op', 'LAN Co-op', 'Shared/Split Screen Co-op'],
-  'Online Co-Op': ['Online Co-op'],
-  'Local Co-Op': ['Shared/Split Screen Co-op', 'LAN Co-op'],
-  'Local Multiplayer': ['Shared/Split Screen', 'Shared/Split Screen PvP', 'Shared/Split Screen Co-op', 'LAN PvP', 'LAN Co-op'],
-  'Split Screen': ['Shared/Split Screen', 'Shared/Split Screen PvP', 'Shared/Split Screen Co-op'],
-  'PvP': ['PvP', 'Online PvP', 'Shared/Split Screen PvP', 'LAN PvP'],
-  'Controller': ['Full controller support', 'Partial Controller Support', 'Tracked Controller Support', 'DualShock Controller Support'],
-  'Massively Multiplayer': ['MMO'],
-  'MMORPG': ['MMO'],
-  'VR': ['VR Only', 'VR Supported'],
-  'Moddable': ['Steam Workshop'],
-  'Level Editor': ['Includes level editor'],
+// does). Structural features only — never genres: "Trading Card Game" is a
+// genre, "Steam Trading Cards" is a store feature, and they must not match.
+//
+// Two lists per tag, because a category can be necessary for a tag without
+// being sufficient:
+//   verifiedBy  categories that establish the tag's whole claim — the tag is a
+//               verified FACT when any of them is listed.
+//   requires    categories the claim cannot be true without; when the game's
+//               list is known and has none of them, the tag is contradicted.
+// "Multi-player" is required by Asynchronous Multiplayer but verifies nothing
+// about asynchronous play; "Co-op" is required by Co-op Campaign but says
+// nothing about a campaign; "MMO" does not make a game an RPG; "LAN Co-op" is
+// networked play, not the same-device play that Local Co-Op means.
+interface FeatureTag { verifiedBy: string[]; requires: string[] }
+const feature = (verifiedBy: string[], requires: string[] = verifiedBy): FeatureTag => ({ verifiedBy, requires });
+const ANY_COOP = ['Co-op', 'Online Co-op', 'LAN Co-op', 'Shared/Split Screen Co-op'];
+const ANY_MULTI = ['Multi-player', 'PvP', 'Online PvP', 'LAN PvP', 'Shared/Split Screen PvP', 'MMO', ...ANY_COOP];
+const SAME_DEVICE = ['Shared/Split Screen', 'Shared/Split Screen PvP', 'Shared/Split Screen Co-op'];
+const FEATURE_TAGS: Record<string, FeatureTag> = {
+  'Singleplayer': feature(['Single-player']),
+  'Multiplayer': feature(ANY_MULTI),
+  'Asynchronous Multiplayer': feature([], ANY_MULTI),
+  'Massively Multiplayer': feature(['MMO']),
+  'MMORPG': feature([], ['MMO']),
+  'Co-op': feature(ANY_COOP),
+  'Co-op Campaign': feature([], ANY_COOP),
+  'Online Co-Op': feature(['Online Co-op']),
+  'Local Co-Op': feature(['Shared/Split Screen Co-op'], ['Shared/Split Screen Co-op', 'LAN Co-op']),
+  'Local Multiplayer': feature(SAME_DEVICE, [...SAME_DEVICE, 'LAN PvP', 'LAN Co-op']),
+  'Split Screen': feature(SAME_DEVICE),
+  'PvP': feature(['PvP', 'Online PvP', 'Shared/Split Screen PvP', 'LAN PvP']),
+  'Controller': feature(['Full controller support', 'Partial Controller Support', 'Tracked Controller Support', 'DualShock Controller Support']),
+  'VR': feature(['VR Only', 'VR Supported']),
+  'Moddable': feature(['Steam Workshop']),
+  'Level Editor': feature(['Includes level editor']),
 };
+
+/** Store-feature facts for one tag against a game's (lower-cased) category set. */
+export function featureFacts(tag: string, categories: Set<string> | undefined): { verifiedBy: string[]; featureMissing: boolean } {
+  const spec = FEATURE_TAGS[tag];
+  if (!spec || !categories) return { verifiedBy: [], featureMissing: false };
+  const has = (c: string) => categories.has(c.toLowerCase());
+  return {
+    verifiedBy: spec.verifiedBy.filter(has),
+    featureMissing: spec.requires.length > 0 && !spec.requires.some(has),
+  };
+}
 
 // Praise, packaging and content descriptors: applied for reasons other than
 // "this is what the game is", so they are neither identity nor a misleading
@@ -123,6 +149,8 @@ export interface TagAudit {
   counts: Record<AuditBucket, number>;
   /** Tags the analyzer would recommend that the page doesn't carry (primary first). */
   missing: TagRecommendation[];
+  /** Recommended feature tags withheld because the store's feature list lacks what they require. */
+  missingContradicted: TagRecommendation[];
   /** The analyzer's avoid list for this game. */
   avoid: TagRecommendation[];
   similarGames: SimilarGame[];
@@ -171,11 +199,7 @@ export function classifyTag(
   s: CurrentTagSignal,
   ctx: AuditContext
 ): Pick<AuditedTag, 'bucket' | 'reason' | 'verifiedBy' | 'featureMissing'> {
-  const wanted = FEATURE_TAG_CATEGORIES[s.tag];
-  const verifiedBy = wanted && ctx.categories
-    ? wanted.filter(c => ctx.categories!.has(c.toLowerCase()))
-    : [];
-  const featureMissing = !!wanted && !!ctx.categories && verifiedBy.length === 0;
+  const { verifiedBy, featureMissing } = featureFacts(s.tag, ctx.categories);
   const base = { verifiedBy, featureMissing };
 
   if (!s.active) {
@@ -297,7 +321,11 @@ export async function auditGame(
   for (const t of tags) counts[t.bucket]++;
 
   const have = new Set(signals.map(s => s.tagId));
-  const missing = [...output.primaryTags, ...output.secondaryTags].filter(t => !have.has(t.tagId));
+  // The same fact check applies to proposals: suggesting Co-op to a page whose
+  // store features list no co-op mode would recommend a contradicted tag.
+  const proposed = [...output.primaryTags, ...output.secondaryTags].filter(t => !have.has(t.tagId));
+  const missing = proposed.filter(t => !featureFacts(t.tag, ctx.categories).featureMissing);
+  const missingContradicted = proposed.filter(t => featureFacts(t.tag, ctx.categories).featureMissing);
 
   // Order: the leading slots are what players see first and how this tool
   // groups games (segment membership = tag in the top 5). Tags are ordered by
@@ -342,6 +370,7 @@ export async function auditGame(
     tags,
     counts,
     missing,
+    missingContradicted,
     // A tag already on the page is judged in the table; repeating it here as
     // "avoid" would contradict a verified store feature (Co-op on Elden Ring).
     avoid: output.neighborEvidenceAvailable ? output.avoidTags.filter(t => !have.has(t.tagId)) : [],
