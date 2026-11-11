@@ -66,6 +66,12 @@ export function readModelSet(modelKey: string): ModelSetRow | null {
   }
 }
 
+/** The set id the loaded database names for a model, or null for an unstamped
+ * set. The loaders address a set's CDN files by it (config.ts). */
+export function currentSetId(modelKey: string): string | null {
+  return readModelSet(modelKey)?.set_id ?? null;
+}
+
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
   // Copy into a plain ArrayBuffer: TS 5.9 types digest() as BufferSource over ArrayBuffer only.
   const digest = await crypto.subtle.digest('SHA-256', new Uint8Array(bytes).buffer as ArrayBuffer);

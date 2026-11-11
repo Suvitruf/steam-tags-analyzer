@@ -52,9 +52,9 @@ export function getCurrentModelKey(): string {
   return currentModelKey;
 }
 
-export async function loadEmbeddingModel(modelKey: string, onProgress?: ProgressCallback): Promise<void> {
+export async function loadEmbeddingModel(modelKey: string, onProgress?: ProgressCallback, modelsBase?: string): Promise<void> {
   const cfg = getModelConfig(modelKey);
-  await rpc('load', { modelKey: cfg.key }, onProgress);
+  await rpc('load', { modelKey: cfg.key, modelsBase }, onProgress);
   currentModelKey = cfg.key;
 }
 

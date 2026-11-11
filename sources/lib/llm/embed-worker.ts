@@ -17,11 +17,12 @@ env.localModelPath = MODELS_BASE;
 
 let embeddingPipeline: any = null;
 let currentConfig: EmbeddingModelConfig | null = null;
+let currentBase: string = MODELS_BASE;
 
 interface RpcRequest {
   id: number;
   type: 'load' | 'embed';
-  payload: { modelKey?: string; text?: string };
+  payload: { modelKey?: string; modelsBase?: string; text?: string };
 }
 
 self.onmessage = async (e: MessageEvent<RpcRequest>) => {
@@ -29,7 +30,8 @@ self.onmessage = async (e: MessageEvent<RpcRequest>) => {
   try {
     if (type === 'load') {
       const cfg = getModelConfig(payload.modelKey!);
-      if (embeddingPipeline && currentConfig?.key === cfg.key) {
+      const base = payload.modelsBase ?? MODELS_BASE;
+      if (embeddingPipeline && currentConfig?.key === cfg.key && currentBase === base) {
         self.postMessage({ id, type: 'done' });
         return;
       }
@@ -39,6 +41,10 @@ self.onmessage = async (e: MessageEvent<RpcRequest>) => {
       }
       embeddingPipeline = null;
       currentConfig = cfg;
+      // The set's own directory (config.ts modelsBase): a new set is a new URL,
+      // so the URL-keyed browser cache can never hand back the previous encoder.
+      currentBase = base;
+      env.localModelPath = base;
       embeddingPipeline = await pipeline('feature-extraction', cfg.onnxPath, {
         quantized: true,
         progress_callback: (p: unknown) => self.postMessage({ id, type: 'progress', payload: p }),

@@ -6,8 +6,8 @@ import { loadDatabase, type DatabaseLoadProgress } from './db/client';
 import { loadRanker } from './scoring/ranker';
 import { loadEmbeddingModel, embed, type ProgressCallback } from './llm/engine';
 import { getCachedGameVectors } from './recommendation/engine';
-import { verifyMatchedSet, type MatchedSetReport } from './matched-set';
-import { DB_URL, rankerUrl, GAME_VECTOR_MODELS } from './config';
+import { verifyMatchedSet, currentSetId, type MatchedSetReport } from './matched-set';
+import { DB_URL, rankerUrl, modelsBase, GAME_VECTOR_MODELS } from './config';
 import type { ByteProgress } from './fetch-progress';
 import type { GameVectors } from './llm/game-knn';
 
@@ -37,13 +37,15 @@ export function ensureDatabase(onProgress?: DatabaseLoadProgress): Promise<void>
 
 export async function ensureRanker(modelKey: string, onProgress?: ByteProgress): Promise<void> {
   if (rankerLoadedFor === modelKey) return;
-  await loadRanker(rankerUrl(modelKey), onProgress);
+  // The database (loaded first; both pages gate on it) names the set whose
+  // files to fetch; an unstamped database resolves to the legacy flat paths.
+  await loadRanker(rankerUrl(modelKey, currentSetId(modelKey)), onProgress);
   rankerLoadedFor = modelKey;
 }
 
 export async function ensureEmbeddingModel(modelKey: string, onProgress?: ProgressCallback): Promise<void> {
   if (embeddingLoadedFor === modelKey) return;
-  await loadEmbeddingModel(modelKey, onProgress);
+  await loadEmbeddingModel(modelKey, onProgress, modelsBase(currentSetId(modelKey)));
   embeddingLoadedFor = modelKey;
 }
 

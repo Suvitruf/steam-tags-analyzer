@@ -28,6 +28,7 @@ import { findSimilarTags, embed, cosineSimilarity } from '../llm/engine';
 import { loadGameVectors, projectQuery, nearestGames, type GameVectors } from '../llm/game-knn';
 import { DEFAULT_MODEL_KEY } from '../llm/models';
 import { GAME_VECTOR_MODELS, gameVectorsUrl } from '../config';
+import { currentSetId } from '../matched-set';
 import { predict, type FeatureVector, featureVectorToArray } from '../scoring/ranker';
 
 // `bytes` accompanies stages that download something (today only the game-vector
@@ -118,7 +119,7 @@ export function getCachedGameVectors(modelKey: string, onProgress?: Recommendati
   if (!p) {
     // Only the call that starts the download sees its progress; later callers
     // share the promise and get the parsed blob.
-    p = loadGameVectors(gameVectorsUrl(modelKey), onProgress && ((loaded, total) =>
+    p = loadGameVectors(gameVectorsUrl(modelKey, currentSetId(modelKey)), onProgress && ((loaded, total) =>
       onProgress('Finding similar games', 'downloading game index', { loaded, total })));
     p.catch(() => gameVectorsCache.delete(modelKey));
     gameVectorsCache.set(modelKey, p);
