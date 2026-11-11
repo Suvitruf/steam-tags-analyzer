@@ -61,6 +61,13 @@ export interface RecommendationInput {
   appName?: string;
   currentTagIds?: number[];
   /**
+   * Drop this App ID from the kNN neighbors without treating it as the
+   * analyzed game (no segment pin, no current tags): an offline evaluation
+   * simulates an unseen game whose own vector is still in the index.
+   * `appid` implies it.
+   */
+  excludeAppid?: number;
+  /**
    * Embedding of `description`, if the caller already has one. Skips the
    * in-browser model; the Node sanity harness (sources/eval) uses it because
    * it embeds with transformers.js directly instead of the web worker.
@@ -139,4 +146,10 @@ export interface RecommendationOutput {
   currentTagSignals?: CurrentTagSignal[];
   /** The K-th candidate's similarity: this query's own relevance floor (avoid list, audit). */
   retrievalCutoff?: number;
+  /**
+   * Every scored candidate in final order, before the primary/secondary
+   * partition and its caps. The offline evaluation measures its top-K
+   * directly.
+   */
+  rankedTagIds: number[];
 }

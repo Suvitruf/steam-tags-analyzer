@@ -187,9 +187,10 @@ export async function recommend(
       // ~1.0 and would vote for exactly the tags under review (the tag audit)
       // or already on its page (analyzer with an App ID). Drop it, fetching
       // one extra so K stays K — mirrors exclude_appid in eval_models.py.
-      const want = input.appid ? KNN_NEIGHBORS + 1 : KNN_NEIGHBORS;
+      const selfAppid = input.appid ?? input.excludeAppid;
+      const want = selfAppid ? KNN_NEIGHBORS + 1 : KNN_NEIGHBORS;
       const neighbors = nearestGames(gv, projected, want)
-        .filter(n => n.appid !== input.appid)
+        .filter(n => n.appid !== selfAppid)
         .slice(0, KNN_NEIGHBORS);
       const appids = neighbors.map(n => n.appid);
       const tagsByApp = getAppTagsForApps(appids);
@@ -527,6 +528,7 @@ export async function recommend(
     neighborEvidenceAvailable,
     currentTagSignals,
     retrievalCutoff,
+    rankedTagIds: scored.map(c => c.tagId),
   };
 }
 
