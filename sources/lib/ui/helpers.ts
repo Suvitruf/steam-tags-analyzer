@@ -2,6 +2,8 @@
 // audit page (audit/ui.ts). Both live in the app.js bundle.
 import type { SimilarGame } from '../types';
 
+import type { MatchedSetReport } from '../matched-set';
+
 export function $(selector: string): HTMLElement | null {
   return document.querySelector(selector);
 }
@@ -61,4 +63,29 @@ export function renderSimilarGames(
       <p class="similar-games-note">${escapeHtml(opts.note)}</p>
       <ul class="similar-games">${items}</ul>
     </div>`;
+}
+
+/**
+ * Show, update or clear the matched-set warning just before `anchor` (the
+ * page's status line). Only a mismatch is shown: a verified set and an
+ * unstamped (pre-manifest) one both stay silent.
+ */
+export function showMatchedSetWarning(report: MatchedSetReport, anchor: HTMLElement | null): void {
+  const id = 'matched-set-warning';
+  let box = document.getElementById(id);
+  if (report.status !== 'mismatch') {
+    box?.remove();
+    return;
+  }
+  if (!box) {
+    box = document.createElement('div');
+    box.id = id;
+    box.className = 'retired-tag-warning matched-set-warning';
+    if (anchor?.parentNode) anchor.parentNode.insertBefore(box, anchor);
+    else document.body.prepend(box);
+  }
+  box.innerHTML =
+    '<strong>Model files don\'t match.</strong> ' +
+    report.problems.map(p => escapeHtml(p.charAt(0).toUpperCase() + p.slice(1)) + '.').join(' ') +
+    ' Results may be degraded until the matching set is deployed.';
 }

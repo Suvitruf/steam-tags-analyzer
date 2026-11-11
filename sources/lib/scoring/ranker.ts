@@ -20,6 +20,8 @@ export interface RankerModel {
   feature_names: string[];
   num_trees: number;
   trees: TreeNode[];
+  /** Matched-set id written by model_set.py stamp; absent on pre-manifest files. */
+  set_id?: string;
 }
 
 let model: RankerModel | null = null;
@@ -27,6 +29,11 @@ let model: RankerModel | null = null;
 export async function loadRanker(url: string, onProgress?: ByteProgress): Promise<void> {
   const bytes = await fetchBytes(url, onProgress, 'ranker');
   model = JSON.parse(new TextDecoder().decode(bytes));
+}
+
+/** undefined = no ranker loaded; null = loaded but unstamped. */
+export function getRankerSetId(): string | null | undefined {
+  return model ? (model.set_id ?? null) : undefined;
 }
 
 export function getRanker(): RankerModel {

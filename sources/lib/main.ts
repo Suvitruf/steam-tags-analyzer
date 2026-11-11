@@ -2,8 +2,8 @@ import { getSegments, getAppById, getAppTags, getRetiredTags } from './db/querie
 import { recommend, type RecommendationProgressCallback } from './recommendation/engine';
 import { listModels, DEFAULT_MODEL_KEY } from './llm/models';
 import type { RecommendationInput, RecommendationOutput } from './types';
-import { ensureDatabase, ensureRanker, ensureEmbeddingModel } from './runtime';
-import { $, escapeHtml } from './ui/helpers';
+import { ensureDatabase, ensureRanker, ensureEmbeddingModel, ensureMatchedSet } from './runtime';
+import { $, escapeHtml, showMatchedSetWarning } from './ui/helpers';
 import { renderResultsHtml } from './ui/results';
 import { ProgressBar, modelProgressHandler } from './ui/progress';
 import { initAuditPage } from './audit/ui';
@@ -161,6 +161,13 @@ async function handleAnalyze(): Promise<void> {
 
     setStatus(`Loading embedding model (${model})...`);
     await ensureEmbeddingModel(model, modelProgressHandler(progress, model));
+    // Once per model: the served ranker, game index and encoder must be the set
+    // the database's centroids were built with.
+    setStatus(`Checking model files (${model})...`);
+    showMatchedSetWarning(
+      await ensureMatchedSet(model, (loaded, total) => progress.set('Downloading game index', loaded, total)),
+      $('#status')
+    );
     progress.hide();
 
     const onProgress: RecommendationProgressCallback = (stage, detail, bytes) => {

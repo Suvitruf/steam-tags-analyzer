@@ -113,7 +113,7 @@ function getCachedTagEmbeddings(modelKey: string): TagEmbedding[] {
 // transient error can be retried next time.
 const gameVectorsCache = new Map<string, Promise<GameVectors>>();
 
-function getCachedGameVectors(modelKey: string, onProgress?: RecommendationProgressCallback): Promise<GameVectors> {
+export function getCachedGameVectors(modelKey: string, onProgress?: RecommendationProgressCallback): Promise<GameVectors> {
   let p = gameVectorsCache.get(modelKey);
   if (!p) {
     // Only the call that starts the download sees its progress; later callers

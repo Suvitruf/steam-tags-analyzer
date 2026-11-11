@@ -2,12 +2,12 @@
 // game's store page. Shares the analyzer's loaders (runtime.ts) and bundle;
 // the logic lives in recommendation/audit.ts.
 import { auditGame, AUDIT, type TagAudit, type AuditedTag, type AuditBucket } from '../recommendation/audit';
-import { ensureDatabase, ensureRanker, ensureEmbeddingModel } from '../runtime';
+import { ensureDatabase, ensureRanker, ensureEmbeddingModel, ensureMatchedSet } from '../runtime';
 import { listModels, DEFAULT_MODEL_KEY } from '../llm/models';
 import { getAppById } from '../db/queries';
 import { fetchLiveApp, liveLookupEnabled, type LiveApp } from '../live';
 import {
-  $, escapeHtml, fmtReviews, tagPageUrl, storeUrl, parseAppIdInput, renderSimilarGames,
+  $, escapeHtml, fmtReviews, tagPageUrl, storeUrl, parseAppIdInput, renderSimilarGames, showMatchedSetWarning,
 } from '../ui/helpers';
 import { ProgressBar, modelProgressHandler } from '../ui/progress';
 import type { TagRecommendation } from '../types';
@@ -114,6 +114,11 @@ async function run(appid: number, fresh = false): Promise<void> {
     await ensureRanker(modelKey, (loaded, total) => progress.set(`Downloading ranker (${modelKey})`, loaded, total));
     setStatus(`Loading embedding model (${modelKey})...`);
     await ensureEmbeddingModel(modelKey, modelProgressHandler(progress, modelKey));
+    setStatus(`Checking model files (${modelKey})...`);
+    showMatchedSetWarning(
+      await ensureMatchedSet(modelKey, (loaded, total) => progress.set('Downloading game index', loaded, total)),
+      $('#audit-status')
+    );
     progress.hide();
 
     const audit = await auditGame(

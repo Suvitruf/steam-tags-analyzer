@@ -16,9 +16,12 @@ export interface GameVectors {
   components: Float32Array; // [dims * origDims] row-major
   appids: Uint32Array;      // [count]  row -> appid
   matrix: Int8Array;        // [count * dims] row-major, unit-normalized * scale
+  /** Matched-set id from the v2 header (model_set.py stamp); null for a v1 blob. */
+  setId: string | null;
 }
 
 const MAGIC = 0x47564543; // "GVEC" little-endian as read below
+const SET_ID_BYTES = 64;   // v2: NUL-padded ASCII set id after the header
 
 export async function loadGameVectors(url: string, onProgress?: ByteProgress): Promise<GameVectors> {
   const bytes = await fetchBytes(url, onProgress, 'game vectors');
@@ -37,16 +40,22 @@ export async function loadGameVectors(url: string, onProgress?: ByteProgress): P
   const dims = dv.getUint32(off, true); off += 4;
   const origDims = dv.getUint32(off, true); off += 4;
   const scale = dv.getFloat32(off, true); off += 4;
-  if (version !== 1) throw new Error(`Unsupported game-vector version ${version}`);
+  if (version !== 1 && version !== 2) throw new Error(`Unsupported game-vector version ${version}`);
+  let setId: string | null = null;
+  if (version === 2) {
+    const raw = new Uint8Array(buf, off, SET_ID_BYTES); off += SET_ID_BYTES;
+    const end = raw.indexOf(0);
+    setId = new TextDecoder().decode(end >= 0 ? raw.subarray(0, end) : raw) || null;
+  }
 
-  // Header is 24 bytes and every section below is 4-byte aligned, so typed
-  // array views over the buffer are zero-copy (little-endian everywhere).
+  // Header is 24 bytes (88 for v2) and every section below is 4-byte aligned,
+  // so typed array views over the buffer are zero-copy (little-endian everywhere).
   const mean = new Float32Array(buf, off, origDims); off += origDims * 4;
   const components = new Float32Array(buf, off, dims * origDims); off += dims * origDims * 4;
   const appids = new Uint32Array(buf, off, count); off += count * 4;
   const matrix = new Int8Array(buf, off, count * dims); off += count * dims;
 
-  return { count, dims, origDims, scale, mean, components, appids, matrix };
+  return { count, dims, origDims, scale, mean, components, appids, matrix, setId };
 }
 
 // Project a raw query embedding into the blob's reduced, unit-normalized space:
