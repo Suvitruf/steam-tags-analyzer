@@ -58,7 +58,12 @@ export const AUDIT = {
   /** Tags on more than this share of all tagged games are too broad to judge — mirror of BROAD_PREVALENCE (export-analytics). */
   BROAD_PREVALENCE: 0.35,
   /** Nearest-game similarity below this: the description is too thin to lean on (10th percentile, sanity run). */
-  THIN_SIGNAL_SIM: 0.7,
+  // Nearest-game cosine below which the description is called thin. An absolute
+  // on a scale each encoder sets: calibrated to the bottom decile of holdout
+  // games (p10 0.70 with the August set, 0.68 with the November set;
+  // measured offline), re-read from the offline audit sanity check's
+  // "Nearest-game similarity" line after every rebuild.
+  THIN_SIGNAL_SIM: 0.68,
   /** The store page leads with this many tags; the slots worth ordering. */
   IDENTITY_SLOTS: 5,
 } as const;
