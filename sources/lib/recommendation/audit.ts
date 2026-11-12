@@ -16,6 +16,7 @@
 // mentions it looks exactly like a joke tag — which is why store features are
 // checked before anything can be called suspicious.
 import type { CurrentTagSignal, ExemplarBasis, Segment, SimilarGame, TagRecommendation, AppTag } from '../types';
+import { thinSignalSim } from '../matched-set';
 import { recommend, type RecommendationProgressCallback } from './engine';
 import { getAppById, getTagStats, getAppTags, getAppTagsCollectedAt, getTagsByIds } from '../db/queries';
 import { DEFAULT_MODEL_KEY } from '../llm/models';
@@ -59,10 +60,10 @@ export const AUDIT = {
   BROAD_PREVALENCE: 0.35,
   /** Nearest-game similarity below this: the description is too thin to lean on (10th percentile, sanity run). */
   // Nearest-game cosine below which the description is called thin. An absolute
-  // on a scale each encoder sets: calibrated to the bottom decile of holdout
-  // games (p10 0.70 with the August set, 0.68 with the November set;
-  // measured offline), re-read from the offline audit sanity check's
-  // "Nearest-game similarity" line after every rebuild.
+  // on a scale each encoder sets: the bottom decile of holdout games (p10 0.70
+  // with the August set, 0.68 with the November set). A stamped set carries
+  // its own measurement in the manifest (thinSignalThreshold below); this
+  // constant is the fallback for an unstamped or uncalibrated database.
   THIN_SIGNAL_SIM: 0.68,
   /** The store page leads with this many tags; the slots worth ordering. */
   IDENTITY_SLOTS: 5,
@@ -318,6 +319,11 @@ function listNames(tags: AuditedTag[]): string {
   return tags.map(t => `${t.tag} (#${t.rank})`).join(', ');
 }
 
+/** The thin-signal cosine for this model: the set's recorded holdout p10, else AUDIT.THIN_SIGNAL_SIM. */
+export function thinSignalThreshold(modelKey: string): number {
+  return thinSignalSim(modelKey) ?? AUDIT.THIN_SIGNAL_SIM;
+}
+
 export async function auditGame(
   input: AuditInput,
   onProgress?: RecommendationProgressCallback,
@@ -394,7 +400,7 @@ export async function auditGame(
   const top3Unsupported = top3.length >= 2 && top3.every(t => t.bucket !== 'identity');
   const thinReason = !output.neighborEvidenceAvailable
     ? 'Similar-game tag data is unavailable or incomplete. This audit uses the description and store features; suspicious-tag judgments and avoid suggestions are withheld.'
-    : topSimilarity < AUDIT.THIN_SIGNAL_SIM
+    : topSimilarity < thinSignalThreshold(modelKey)
       ? `The nearest game is only a ${topSimilarity.toFixed(2)} cosine match, so this description gives the engine little to go on.`
       : top3Unsupported
         ? 'None of the three most-voted tags is backed by the description or by similar games — the blurb likely describes story or theme rather than gameplay.'

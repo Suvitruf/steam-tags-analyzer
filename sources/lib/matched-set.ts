@@ -72,6 +72,23 @@ export function currentSetId(modelKey: string): string | null {
   return readModelSet(modelKey)?.set_id ?? null;
 }
 
+/**
+ * The set's recorded thin-signal calibration: the holdout's bottom-decile
+ * nearest-game cosine, measured by the offline model pipeline when it stamps a set, with
+ * the served encoder and blob and kept in the manifest notes as
+ * `thin_signal.nearest_game_p10`. Null for an unstamped or uncalibrated set.
+ */
+export function thinSignalSim(modelKey: string): number | null {
+  const notes = readModelSet(modelKey)?.notes;
+  if (!notes) return null;
+  try {
+    const v = JSON.parse(notes)?.thin_signal?.nearest_game_p10;
+    return typeof v === 'number' && v > 0 && v < 1 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
   // Copy into a plain ArrayBuffer: TS 5.9 types digest() as BufferSource over ArrayBuffer only.
   const digest = await crypto.subtle.digest('SHA-256', new Uint8Array(bytes).buffer as ArrayBuffer);
