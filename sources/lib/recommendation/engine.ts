@@ -5,6 +5,7 @@ import type {
   RecommendationOutput,
   Segment,
   SimilarGame,
+  ExemplarBasis,
   TagRecommendation,
   TagScore,
 } from '../types';
@@ -178,6 +179,7 @@ export async function recommend(
   const neighborVote = new Map<number, number>();
   const neighborShare = new Map<number, number>(); // tag → share of neighbors carrying it
   let similarGames: SimilarGame[] = [];
+  let neighborAppids: number[] = []; // for the exemplars: top performers near this query come first
   let neighborEvidenceAvailable = false;
   if (GAME_VECTOR_MODELS.has(modelKey)) {
     try {
@@ -194,6 +196,7 @@ export async function recommend(
         .filter(n => n.appid !== selfAppid)
         .slice(0, KNN_NEIGHBORS);
       const appids = neighbors.map(n => n.appid);
+      neighborAppids = appids;
       const tagsByApp = getAppTagsForApps(appids);
       for (const n of neighbors) {
         const w = Math.max(0, n.similarity);
@@ -226,6 +229,7 @@ export async function recommend(
       neighborVote.clear();
       neighborShare.clear();
       similarGames = [];
+      neighborAppids = [];
       console.warn('Game-kNN channel unavailable:', (err as Error).message);
     }
   }
@@ -467,10 +471,18 @@ export async function recommend(
     }
   }
 
+  // Examples under a tag are the games behind its lift — the segment's top
+  // performers carrying it, the games behind the lift — never the game under
+  // analysis, and nearest games first so the examples are also like this one.
+  let exemplarBasis: ExemplarBasis | undefined;
   if (segment && exemplarWanted.length > 0) {
-    const exemplars = getExemplarGamesForTags(segment.segment_id, exemplarWanted, 3);
+    const exemplars = getExemplarGamesForTags(segment.segment_id, exemplarWanted, 3, {
+      excludeAppid: input.appid ?? input.excludeAppid,
+      nearAppids: neighborAppids,
+    });
+    exemplarBasis = exemplars.basis;
     for (const rec of [...primary, ...secondary]) {
-      rec.exemplarGames = exemplars.get(rec.tagId) ?? [];
+      rec.exemplarGames = exemplars.games.get(rec.tagId) ?? [];
     }
   }
 
@@ -526,6 +538,7 @@ export async function recommend(
     analyzedApp,
     currentTagIds,
     similarGames,
+    exemplarBasis,
     neighborEvidenceAvailable,
     currentTagSignals,
     retrievalCutoff,

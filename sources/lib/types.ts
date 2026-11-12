@@ -116,8 +116,21 @@ export interface TagRecommendation {
   successLift: number;
   confidence: number;
   explanation: string;
+  /**
+   * Games behind the tag's lift: the segment's top performers (the top fifth
+   * of each release-year cohort, as the offline pipeline picks them) that carry the
+   * tag, nearest to the query first. `output.exemplarBasis` says whether the
+   * database had that set. Never the analyzed game itself.
+   */
   exemplarGames: Array<{ name: string; appid: number }>;
 }
+
+/**
+ * Where exemplar games come from: 'top' = the segment's top-performer set
+ * (`segment_top_games`, the lift's numerator); 'segment' = any segment member
+ * by review count, when the database predates that table (before 2026-11-12).
+ */
+export type ExemplarBasis = 'top' | 'segment';
 
 export interface SimilarGame {
   appid: number;
@@ -139,6 +152,8 @@ export interface RecommendationOutput {
   currentTagIds?: number[];
   /** Nearest games to the description; can be present even when their tag evidence is incomplete. */
   similarGames: SimilarGame[];
+  /** What `exemplarGames` were drawn from; absent when no segment matched. */
+  exemplarBasis?: ExemplarBasis;
   /** True only when a nonempty neighbor set has tag data for every neighbor.
    * When false, zero votes/shares mean unavailable evidence, not observed absence. */
   neighborEvidenceAvailable: boolean;

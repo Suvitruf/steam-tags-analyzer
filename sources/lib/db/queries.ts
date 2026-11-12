@@ -1,5 +1,10 @@
 import { query, queryOne } from './client';
-import type { App, Tag, AppTag, Segment, TagScore } from '../types';
+import type { App, Tag, AppTag, Segment, TagScore, ExemplarBasis } from '../types';
+
+// Segment membership = the anchor tag within a game's top-N ranks; mirror of
+// the offline data pipeline's segment-membership setting (default 5),
+// which the exemplar fallback below has to agree with.
+const SEGMENT_MEMBERSHIP_MAX_RANK = 5;
 
 export function getAllTags(): Tag[] {
   return query<Tag>('SELECT tag_id, name, normalized_name, is_active FROM tags WHERE is_active = 1 ORDER BY name');
@@ -127,22 +132,6 @@ export function getCompetitorTagOverlap(appids: number[]): Array<{ tag_id: numbe
   );
 }
 
-export function getTopGamesInSegment(segmentId: number, limit = 10): App[] {
-  return query<App>(
-    `SELECT a.appid, a.name, a.type, a.release_date, a.price_usd,
-            a.developer, a.publisher, a.is_released, a.short_description,
-            a.genres, a.categories
-     FROM apps a
-     JOIN app_tags at ON a.appid = at.appid
-     JOIN segments s ON s.main_tag_id = at.tag_id AND at.rank = 1
-     LEFT JOIN app_metrics m ON a.appid = m.appid
-     WHERE s.segment_id = ? AND a.is_released = 1
-     ORDER BY m.review_count DESC
-     LIMIT ?`,
-    [segmentId, limit]
-  );
-}
-
 export function findTagByName(name: string): Tag | null {
   return queryOne<Tag>(
     'SELECT tag_id, name, normalized_name, is_active FROM tags WHERE normalized_name = ?',
@@ -157,34 +146,71 @@ export function findTagByName(name: string): Tag | null {
  * join, it cost ~1.4s of main-thread stall per analysis (measured 2026-08-10).
  * A window function partitions a single scan instead.
  */
+/**
+ * Supporting examples for recommended tags: games of the segment's
+ * top-performer set that carry the tag — exactly the rows the offline pipeline
+ * counts for top_frequency, so the examples are the games behind the lift —
+ * nearest games to the query first, then by review count. The analyzed game
+ * never explains itself. A database without `segment_top_games` (exported
+ * before 2026-11-12) falls back to segment members under the shared
+ * membership rule, by review count, and says so through `basis`.
+ */
 export function getExemplarGamesForTags(
   segmentId: number,
   tagIds: number[],
-  limit = 3
-): Map<number, Array<{ name: string; appid: number }>> {
-  const result = new Map<number, Array<{ name: string; appid: number }>>();
-  if (tagIds.length === 0) return result;
-  const placeholders = tagIds.map(() => '?').join(',');
+  limit = 3,
+  opts: { excludeAppid?: number | null; nearAppids?: number[] } = {}
+): { basis: ExemplarBasis; games: Map<number, Array<{ name: string; appid: number }>> } {
+  const collect = (rows: Array<{ tag_id: number; name: string; appid: number }>) => {
+    const games = new Map<number, Array<{ name: string; appid: number }>>();
+    for (const r of rows) {
+      const list = games.get(r.tag_id);
+      if (list) list.push({ name: r.name, appid: r.appid });
+      else games.set(r.tag_id, [{ name: r.name, appid: r.appid }]);
+    }
+    return games;
+  };
+  if (tagIds.length === 0) return { basis: 'top', games: new Map() };
+  const near = opts.nearAppids ?? [];
+  const exclude = opts.excludeAppid ?? -1;
+  const tagList = tagIds.map(() => '?').join(',');
+  const nearList = near.length > 0 ? near.map(() => '?').join(',') : 'NULL';
+  try {
+    const rows = query<{ tag_id: number; name: string; appid: number }>(
+      `SELECT tag_id, name, appid FROM (
+         SELECT at2.tag_id AS tag_id, a.name AS name, a.appid AS appid,
+                ROW_NUMBER() OVER (
+                  PARTITION BY at2.tag_id
+                  ORDER BY (a.appid IN (${nearList})) DESC, m.review_count DESC, a.appid
+                ) AS rn
+         FROM segment_top_games stg
+         JOIN apps a ON a.appid = stg.appid
+         JOIN app_tags at2 ON at2.appid = stg.appid AND at2.tag_id IN (${tagList})
+         LEFT JOIN app_metrics m ON m.appid = a.appid
+         WHERE stg.segment_id = ? AND a.appid <> ?
+       ) WHERE rn <= ?
+       ORDER BY tag_id, rn`,
+      [...near, ...tagIds, segmentId, exclude, limit]
+    );
+    return { basis: 'top', games: collect(rows) };
+  } catch {
+    // no segment_top_games table: the database predates it
+  }
   const rows = query<{ tag_id: number; name: string; appid: number }>(
     `SELECT tag_id, name, appid FROM (
        SELECT at2.tag_id AS tag_id, a.name AS name, a.appid AS appid,
-              ROW_NUMBER() OVER (PARTITION BY at2.tag_id ORDER BY m.review_count DESC) AS rn
+              ROW_NUMBER() OVER (PARTITION BY at2.tag_id ORDER BY m.review_count DESC, a.appid) AS rn
        FROM apps a
-       JOIN app_tags at1 ON a.appid = at1.appid
-       JOIN segments s ON s.main_tag_id = at1.tag_id AND at1.rank = 1
-       JOIN app_tags at2 ON a.appid = at2.appid AND at2.tag_id IN (${placeholders})
+       JOIN app_tags at1 ON a.appid = at1.appid AND at1.rank <= ${SEGMENT_MEMBERSHIP_MAX_RANK}
+       JOIN segments s ON s.main_tag_id = at1.tag_id
+       JOIN app_tags at2 ON a.appid = at2.appid AND at2.tag_id IN (${tagList})
        LEFT JOIN app_metrics m ON a.appid = m.appid
-       WHERE s.segment_id = ? AND a.is_released = 1
+       WHERE s.segment_id = ? AND a.is_released = 1 AND a.type = 'game' AND a.appid <> ?
      ) WHERE rn <= ?
      ORDER BY tag_id, rn`,
-    [...tagIds, segmentId, limit]
+    [...tagIds, segmentId, exclude, limit]
   );
-  for (const r of rows) {
-    const list = result.get(r.tag_id);
-    if (list) list.push({ name: r.name, appid: r.appid });
-    else result.set(r.tag_id, [{ name: r.name, appid: r.appid }]);
-  }
-  return result;
+  return { basis: 'segment', games: collect(rows) };
 }
 
 export interface TagEmbedding {

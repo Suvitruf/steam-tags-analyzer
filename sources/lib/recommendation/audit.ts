@@ -15,7 +15,7 @@
 // games say this", not "is this true". Multiplayer on a game whose blurb never
 // mentions it looks exactly like a joke tag — which is why store features are
 // checked before anything can be called suspicious.
-import type { CurrentTagSignal, Segment, SimilarGame, TagRecommendation, AppTag } from '../types';
+import type { CurrentTagSignal, ExemplarBasis, Segment, SimilarGame, TagRecommendation, AppTag } from '../types';
 import { recommend, type RecommendationProgressCallback } from './engine';
 import { getAppById, getTagStats, getAppTags, getAppTagsCollectedAt, getTagsByIds } from '../db/queries';
 import { DEFAULT_MODEL_KEY } from '../llm/models';
@@ -164,6 +164,8 @@ export interface TagAudit {
   counts: Record<AuditBucket, number>;
   /** Tags the analyzer would recommend that the page doesn't carry (primary first). */
   missing: TagRecommendation[];
+  /** What the examples under `missing` are drawn from (the recommender's `exemplarBasis`). */
+  exemplarBasis?: ExemplarBasis;
   /** Recommended feature tags withheld because the store's feature list lacks what they require. */
   missingContradicted: TagRecommendation[];
   /** The analyzer's avoid list for this game. */
@@ -421,6 +423,7 @@ export async function auditGame(
     // "avoid" would contradict a verified store feature (Co-op on Elden Ring).
     avoid: output.neighborEvidenceAvailable ? output.avoidTags.filter(t => !have.has(t.tagId)) : [],
     similarGames: output.similarGames,
+    exemplarBasis: output.exemplarBasis,
     signal: { topSimilarity, thin: thinReason !== null, reason: thinReason, neighborEvidenceAvailable: output.neighborEvidenceAvailable },
     orderNotes,
     retrievalCutoff: ctx.retrievalCutoff,

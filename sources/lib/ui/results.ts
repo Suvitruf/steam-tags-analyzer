@@ -3,10 +3,11 @@
 // Every Steam-sourced string — game names, exemplar names, tag names and the
 // explanations that embed them — goes through escapeHtml; the only raw
 // interpolations are numbers and our own literals.
-import type { RecommendationOutput, TagRecommendation } from '../types';
+import type { ExemplarBasis, RecommendationOutput, TagRecommendation } from '../types';
 import { escapeHtml, tagPageUrl, storeUrl, renderSimilarGames } from './helpers';
 
 export function renderResultsHtml(output: RecommendationOutput): string {
+  const exemplarOpts = { basis: output.exemplarBasis, segment: output.segment?.main_tag_name };
   const segmentInfo = output.segment
     ? `<p class="segment-info">Segment: <strong>${escapeHtml(output.segment.main_tag_name)}</strong> (${output.segment.game_count} games${output.segmentInferred ? ', inferred from the description' : ''})</p>`
     : '<p class="segment-info">No segment matched &mdash; showing general recommendations</p>';
@@ -34,11 +35,11 @@ export function renderResultsHtml(output: RecommendationOutput): string {
     <div class="results-grid">
       <div class="result-section result-primary">
         <h3>Recommended Primary Tags</h3>
-        ${renderTagListHtml(output.primaryTags, 'primary', maxScore, currentTags)}
+        ${renderTagListHtml(output.primaryTags, 'primary', maxScore, currentTags, exemplarOpts)}
       </div>
       <div class="result-section result-secondary">
         <h3>Secondary Tags</h3>
-        ${renderTagListHtml(output.secondaryTags, 'secondary', maxScore, currentTags)}
+        ${renderTagListHtml(output.secondaryTags, 'secondary', maxScore, currentTags, exemplarOpts)}
       </div>
       <div class="result-section result-avoid">
         <h3>Tags to Avoid</h3>
@@ -73,9 +74,23 @@ export function renderTagListHtml(
   tags: TagRecommendation[],
   type: 'primary' | 'secondary' | 'avoid',
   maxScore: number,
-  currentTags: Set<number>
+  currentTags: Set<number>,
+  exemplars: { basis?: ExemplarBasis; segment?: string } = {}
 ): string {
   if (tags.length === 0) return '<p class="no-tags">No tags in this category</p>';
+  // Which statistic the examples support: the lift counts
+  // the segment's top performers, so that is what the examples are drawn from
+  // — unless this database predates the top-performer table.
+  const segmentName = exemplars.segment ?? 'this';
+  const exemplarNote = exemplars.basis === 'segment'
+    ? {
+        label: 'Examples in the segment',
+        title: `Games in the ${segmentName} segment that carry this tag, by review count. This database predates the top-performer table, so these are not the games behind the lift.`,
+      }
+    : {
+        label: 'Examples among top performers',
+        title: `Games in the top fifth of their release-year cohort within the ${segmentName} segment that carry this tag — the games the lift counts. Nearest to your description first.`,
+      };
 
   return `<ol class="tag-list tag-list-${type}">
     ${tags.map((t) => {
@@ -83,7 +98,7 @@ export function renderTagListHtml(
       const haveBadge = currentTags.has(t.tagId)
         ? ' <span class="badge badge-have" title="This game already uses this tag">✓ already using</span>'
         : '';
-      const exemplars = t.exemplarGames.map(g =>
+      const exemplarLinks = t.exemplarGames.map(g =>
         `<a class="exemplar-link" href="${escapeHtml(storeUrl(g.appid))}" target="_blank" rel="noopener noreferrer">${escapeHtml(g.name)}</a>`
       ).join(', ');
       return `
@@ -95,7 +110,7 @@ export function renderTagListHtml(
           </span>
         </div>
         <p class="tag-explanation">${escapeHtml(t.explanation)}</p>
-        ${exemplars ? `<p class="tag-exemplars">Examples: ${exemplars}</p>` : ''}
+        ${exemplarLinks ? `<p class="tag-exemplars" title="${escapeHtml(exemplarNote.title)}">${exemplarNote.label}: ${exemplarLinks}</p>` : ''}
       </li>
     `;
     }).join('')}
