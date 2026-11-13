@@ -9,8 +9,8 @@ import { loadRanker } from './scoring/ranker';
 import { loadEmbeddingModel, embed, type ProgressCallback } from './llm/engine';
 import { getCachedGameVectors } from './recommendation/engine';
 import { verifyMatchedSet, currentSetId, type MatchedSetReport } from './matched-set';
-import { DB_URL, rankerUrl, modelsBase, GAME_VECTOR_MODELS } from './config';
-import type { ByteProgress } from './fetch-progress';
+import { DB_URL, DB_GZ_URL, rankerUrl, modelsBase, GAME_VECTOR_MODELS } from './config';
+import { FetchError, canInflate, type ByteProgress } from './fetch-progress';
 import type { GameVectors } from './llm/game-knn';
 
 let dbPromise: Promise<void> | null = null;
@@ -27,7 +27,7 @@ export function ensureDatabase(onProgress?: DatabaseLoadProgress): Promise<void>
     // mid-download still gets the remaining events.
     const listeners = new Set<DatabaseLoadProgress>();
     dbListeners = listeners;
-    dbPromise = loadDatabase(DB_URL, e => { for (const l of listeners) l(e); }).then(() => undefined);
+    dbPromise = fetchDatabase(e => { for (const l of listeners) l(e); });
     // Drop a failed load so the next call can retry instead of re-rejecting.
     dbPromise.catch(() => { dbPromise = null; });
     const settle = () => { if (dbListeners === listeners) dbListeners = null; };
@@ -35,6 +35,23 @@ export function ensureDatabase(onProgress?: DatabaseLoadProgress): Promise<void>
   }
   if (onProgress) dbListeners?.add(onProgress);
   return dbPromise;
+}
+
+// The gzip copy is a third of the bytes; a browser that cannot inflate a
+// stream takes the plain file, and so does everyone while the compressed copy
+// is not on the CDN yet (a deploy ships the browser before the first export
+// that publishes both).
+async function fetchDatabase(onProgress: DatabaseLoadProgress): Promise<void> {
+  if (canInflate()) {
+    try {
+      await loadDatabase(DB_GZ_URL, onProgress);
+      return;
+    } catch (err) {
+      if (!(err instanceof FetchError) || (err.status !== 404 && err.status !== 403)) throw err;
+      console.warn('No compressed database on the CDN; loading the plain file.');
+    }
+  }
+  await loadDatabase(DB_URL, onProgress);
 }
 
 export async function ensureRanker(modelKey: string, onProgress?: ByteProgress): Promise<void> {

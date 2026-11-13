@@ -6,6 +6,7 @@
 //
 // Layout (mirrors what scripts upload / the GitHub Action refreshes):
 //   {ASSET_BASE}/steam-tags.db                       — browser database
+//   {ASSET_BASE}/steam-tags.db.gz                    — the same, gzip-compressed
 //   {ASSET_BASE}/data/[{set id}/]ranker-{model}.json — LightGBM rankers
 //   {ASSET_BASE}/data/[{set id}/]game-vectors-{model}.bin — kNN blobs
 //   {ASSET_BASE}/models/[{set id}/]steam-{model}-onnx/... — transformers.js models
@@ -14,6 +15,10 @@
 export const ASSET_BASE = 'https://projects.cdn.aapanasik.com/steam-tags';
 
 export const DB_URL = `${ASSET_BASE}/steam-tags.db`;
+// The compressed copy is what a browser that can inflate a stream loads
+// (about a third of the bytes). The plain file stays for
+// the Worker's /db fallback and for anything that reads it by Range.
+export const DB_GZ_URL = `${DB_URL}.gz`;
 
 // A stamped set's files live under its set id on the CDN: the
 // database names the set, so a browser that cached the previous encoder (the
