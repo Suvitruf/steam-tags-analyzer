@@ -2,7 +2,7 @@
 // game's store page. Shares the analyzer's loaders (runtime.ts) and bundle;
 // the logic lives in recommendation/audit.ts.
 import { auditGame, AUDIT, type TagAudit, type AuditedTag, type AuditBucket } from '../recommendation/audit';
-import { ensureDatabase, ensureRanker, ensureEmbeddingModel, ensureMatchedSet } from '../runtime';
+import { ensureDatabase, ensureModel, type ModelProgress } from '../runtime';
 import { listModels, DEFAULT_MODEL_KEY } from '../llm/models';
 import { getAppById } from '../db/queries';
 import { fetchLiveApp, liveLookupEnabled, type LiveApp } from '../live';
@@ -90,6 +90,26 @@ function setButtonsDisabled(disabled: boolean): void {
   }
 }
 
+function modelProgress(model: string): ModelProgress {
+  return {
+    ranker: (loaded, total) => progress.set(`Downloading ranker (${model})`, loaded, total),
+    model: modelProgressHandler(progress, model),
+    index: (loaded, total) => progress.set('Downloading game index', loaded, total),
+  };
+}
+
+// Background load of a model's files; a failure is left for the next audit to
+// retry and report.
+function warmModel(model: string): void {
+  ensureModel(model, modelProgress(model)).then(
+    () => progress.hide(),
+    err => {
+      progress.hide();
+      console.warn(`Preloading model ${model} failed; the next audit retries:`, (err as Error).message);
+    }
+  );
+}
+
 // `fresh`: fetch the page's current tags and store features from Steam even
 // when the dataset has this game, and audit those instead of the snapshot.
 async function run(appid: number, fresh = false): Promise<void> {
@@ -110,15 +130,10 @@ async function run(appid: number, fresh = false): Promise<void> {
       live = await fetchLiveApp(appid, { fresh });
     }
 
-    setStatus(`Loading ranker (${modelKey})...`);
-    await ensureRanker(modelKey, (loaded, total) => progress.set(`Downloading ranker (${modelKey})`, loaded, total));
-    setStatus(`Loading embedding model (${modelKey})...`);
-    await ensureEmbeddingModel(modelKey, modelProgressHandler(progress, modelKey));
-    setStatus(`Checking model files (${modelKey})...`);
-    showMatchedSetWarning(
-      await ensureMatchedSet(modelKey, (loaded, total) => progress.set('Downloading game index', loaded, total)),
-      $('#audit-status')
-    );
+    // Usually loaded already by the warm-up started when the database opened
+    // (runtime.ts); otherwise this waits its turn and the bar shows the download.
+    setStatus(`Loading model files (${modelKey})...`);
+    showMatchedSetWarning(await ensureModel(modelKey, modelProgress(modelKey)), $('#audit-status'));
     progress.hide();
 
     const audit = await auditGame(
@@ -291,6 +306,8 @@ export async function initAuditPage(container: HTMLElement): Promise<void> {
     });
     progress.hide();
     setStatus('Ready', 'success');
+    // The model's files load while the visitor types the App ID (runtime.ts).
+    warmModel(modelKey);
 
     const btn = $('#audit-btn') as HTMLButtonElement | null;
     if (btn) {
@@ -320,7 +337,8 @@ export async function initAuditPage(container: HTMLElement): Promise<void> {
     const modelSelect = $('#audit-model-select') as HTMLSelectElement | null;
     modelSelect?.addEventListener('change', () => {
       modelKey = modelSelect.value;
-      setStatus(`Model set to ${modelKey} — loads on next audit`, 'info');
+      setStatus(`Model set to ${modelKey}`, 'info');
+      warmModel(modelKey);
     });
 
     // Deep link: /audit?appid=1245620 runs immediately; &live=1 audits the

@@ -1,7 +1,9 @@
 // Shared loaders for the heavy runtime artifacts (DB, ranker, embedding
 // model), memoized per model so the analyzer and the audit page — both in
 // app.js — never fetch the same thing twice and switching models only reloads
-// what changed. Everything is lazy: nothing downloads until first use.
+// what changed. The database loads when a page opens; a model's files load
+// right after it through ensureModel, while the visitor reads and types, so the
+// first click finds them.
 import { loadDatabase, type DatabaseLoadProgress } from './db/client';
 import { loadRanker } from './scoring/ranker';
 import { loadEmbeddingModel, embed, type ProgressCallback } from './llm/engine';
@@ -79,4 +81,33 @@ export function ensureMatchedSet(modelKey: string, onProgress?: ByteProgress): P
     matchedSetCache.set(modelKey, p);
   }
   return p;
+}
+
+export interface ModelProgress {
+  ranker?: ByteProgress;
+  model?: ProgressCallback;
+  index?: ByteProgress;
+}
+
+// Model loads on a page run one after another: the encoder worker holds one
+// model and the matched-set probe embeds through it, so a warm-up started at
+// page open and an analysis that follows (or a model switched meanwhile) must
+// never load two models at once. A load that failed is not memoized, so the
+// next call retries.
+let modelQueue: Promise<void> = Promise.resolve();
+
+/**
+ * Everything an analysis with this model needs — ranker, encoder, game index
+ * and the matched-set check — in order. Memoized parts resolve at once. The
+ * pages call it when the database is open (so the first click finds the files
+ * loaded) and again from the click, which then only waits its turn.
+ */
+export function ensureModel(modelKey: string, progress: ModelProgress = {}): Promise<MatchedSetReport> {
+  const run = modelQueue.then(async () => {
+    await ensureRanker(modelKey, progress.ranker);
+    await ensureEmbeddingModel(modelKey, progress.model);
+    return ensureMatchedSet(modelKey, progress.index);
+  });
+  modelQueue = run.then(() => undefined, () => undefined);
+  return run;
 }

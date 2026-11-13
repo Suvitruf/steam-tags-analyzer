@@ -2,7 +2,7 @@ import { getSegments, getAppById, getAppTags, getRetiredTags } from './db/querie
 import { recommend, type RecommendationProgressCallback } from './recommendation/engine';
 import { listModels, DEFAULT_MODEL_KEY } from './llm/models';
 import type { RecommendationInput, RecommendationOutput } from './types';
-import { ensureDatabase, ensureRanker, ensureEmbeddingModel, ensureMatchedSet } from './runtime';
+import { ensureDatabase, ensureModel, type ModelProgress } from './runtime';
 import { $, escapeHtml, showMatchedSetWarning } from './ui/helpers';
 import { renderResultsHtml } from './ui/results';
 import { ProgressBar, modelProgressHandler } from './ui/progress';
@@ -39,6 +39,26 @@ function renderResults(output: RecommendationOutput): void {
   const container = $('#results');
   if (!container) return;
   container.innerHTML = renderResultsHtml(output);
+}
+
+function modelProgress(model: string): ModelProgress {
+  return {
+    ranker: (loaded, total) => progress.set(`Downloading ranker (${model})`, loaded, total),
+    model: modelProgressHandler(progress, model),
+    index: (loaded, total) => progress.set('Downloading game index', loaded, total),
+  };
+}
+
+// Background load of a model's files; a failure is left for the next analysis
+// to retry and report, with its hint about unbuilt models.
+function warmModel(model: string): void {
+  ensureModel(model, modelProgress(model)).then(
+    () => progress.hide(),
+    err => {
+      progress.hide();
+      console.warn(`Preloading model ${model} failed; the next analysis retries:`, (err as Error).message);
+    }
+  );
 }
 
 function populateMainTagDropdown(): void {
@@ -154,20 +174,13 @@ async function handleAnalyze(): Promise<void> {
   const model = state.model;
 
   try {
-    // Both are memoized per model (runtime.ts): instant when already loaded,
-    // and the progress bar only appears when something really downloads.
-    setStatus(`Loading ranker (${model})...`);
-    await ensureRanker(model, (loaded, total) => progress.set(`Downloading ranker (${model})`, loaded, total));
-
-    setStatus(`Loading embedding model (${model})...`);
-    await ensureEmbeddingModel(model, modelProgressHandler(progress, model));
-    // Once per model: the served ranker, game index and encoder must be the set
-    // the database's centroids were built with.
-    setStatus(`Checking model files (${model})...`);
-    showMatchedSetWarning(
-      await ensureMatchedSet(model, (loaded, total) => progress.set('Downloading game index', loaded, total)),
-      $('#status')
-    );
+    // Ranker, encoder and game index: usually loaded already by the warm-up
+    // that started when the database opened (runtime.ts), so this resolves at
+    // once; otherwise it waits its turn and the bar shows what is downloading.
+    // The report says whether those files are the set the database's
+    // centroids were built with.
+    setStatus(`Loading model files (${model})...`);
+    showMatchedSetWarning(await ensureModel(model, modelProgress(model)), $('#status'));
     progress.hide();
 
     const onProgress: RecommendationProgressCallback = (stage, detail, bytes) => {
@@ -270,9 +283,11 @@ async function init(): Promise<void> {
     progress.hide();
     state.dbLoaded = true;
 
-    // Ranker and embedding model are loaded lazily on first analyze, per the
-    // selected model, so switching models doesn't reload anything until needed.
     setStatus('Ready', 'success');
+    // The model's files load now, while the visitor reads and types, so the
+    // first click does not wait for them. They need the open database to name
+    // the set (runtime.ts).
+    warmModel(state.model);
 
     populateMainTagDropdown();
 
@@ -300,7 +315,8 @@ async function init(): Promise<void> {
     const modelSelect = $('#model-select') as HTMLSelectElement | null;
     modelSelect?.addEventListener('change', () => {
       state.model = modelSelect.value;
-      setStatus(`Model set to ${modelSelect.value} — loads on next analyze`, 'info');
+      setStatus(`Model set to ${modelSelect.value}`, 'info');
+      warmModel(state.model);
     });
 
     // Look the game up by App ID and pull in its real Steam description.
