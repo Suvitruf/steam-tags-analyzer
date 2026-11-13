@@ -24,7 +24,6 @@ export interface AppTag {
   tag_id: number;
   tag_name: string;
   rank: number;
-  weight: number;
 }
 
 export interface Segment {

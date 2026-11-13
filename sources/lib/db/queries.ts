@@ -78,7 +78,7 @@ export function getAppById(appid: number): App | null {
 
 export function getAppTags(appid: number): AppTag[] {
   return query<AppTag>(
-    `SELECT at.appid, at.tag_id, t.name as tag_name, at.rank, at.weight
+    `SELECT at.appid, at.tag_id, t.name as tag_name, at.rank
      FROM app_tags at
      JOIN tags t ON t.tag_id = at.tag_id
      WHERE at.appid = ?
@@ -87,10 +87,18 @@ export function getAppTags(appid: number): AppTag[] {
   );
 }
 
+function hasTable(name: string): boolean {
+  return queryOne(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`, [name]) !== null;
+}
+
 /** When the dataset last observed this game's tag list (ISO date-time), or null when it has none. */
 export function getAppTagsCollectedAt(appid: number): string | null {
+  // Exports since 2026-11 carry one observation time per game;
+  // earlier ones stamp every tag row.
   const row = queryOne<{ collected_at: string | null }>(
-    `SELECT MAX(collected_at) AS collected_at FROM app_tags WHERE appid = ?`,
+    hasTable('app_tag_snapshots')
+      ? `SELECT collected_at FROM app_tag_snapshots WHERE appid = ?`
+      : `SELECT MAX(collected_at) AS collected_at FROM app_tags WHERE appid = ?`,
     [appid]
   );
   return row?.collected_at ?? null;
