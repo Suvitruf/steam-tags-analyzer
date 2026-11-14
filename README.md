@@ -12,6 +12,7 @@ Steam Tag Analyzer helps indie developers describe their game, find relevant com
 ## What you can do
 
 - **Analyze a game pitch.** Get primary and secondary tags, misleading tags to avoid, and similar successful games that explain the recommendations.
+- **Use competitor games.** Enter Steam App IDs to include their tags. Games without dataset tags are looked up on Steam; results show which competitors were included and why others could not be counted.
 - **Audit an existing store page.** Inspect which tags describe the game, correspond to declared store features, or deserve further investigation.
 - **Choose paid or free games.** All game analytics offer All games, Paid games and Free games, with the selection saved on your device and in shared links.
 - **Build a comparison cohort.** Filter by release years, tag positions, included/excluded tags, observed price, features, and publisher-name states. Save filters on your device, share links, and export game lists as CSV.

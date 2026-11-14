@@ -1,5 +1,6 @@
 import { getSegments, getAppById, getAppTags, getRetiredTags } from './db/queries';
 import { recommend, type RecommendationProgressCallback } from './recommendation/engine';
+import { parseCompetitorAppids, resolveCompetitors } from './recommendation/competitors';
 import { listModels, DEFAULT_MODEL_KEY } from './llm/models';
 import type { RecommendationInput, RecommendationOutput } from './types';
 import { ensureDatabase, ensureModel, type ModelProgress } from './runtime';
@@ -150,6 +151,13 @@ async function handleAnalyze(): Promise<void> {
   const mainTag = ($('#main-tag') as HTMLSelectElement)?.value || undefined;
   const appidStr = ($('#appid') as HTMLInputElement)?.value?.trim();
   const competitorsStr = ($('#competitors') as HTMLInputElement)?.value?.trim();
+  let competitorAppids: number[];
+  try {
+    competitorAppids = parseCompetitorAppids(competitorsStr ?? '');
+  } catch (err) {
+    setStatus((err as Error).message, 'error');
+    return;
+  }
 
   const appid = appidStr ? parseInt(appidStr, 10) : undefined;
   // If we live-looked-up this exact App ID, pass its name + current tags through
@@ -160,9 +168,7 @@ async function handleAnalyze(): Promise<void> {
     description,
     mainTag,
     appid,
-    competitorAppids: competitorsStr
-      ? competitorsStr.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n))
-      : undefined,
+    competitorAppids,
     appName: live?.name,
     currentTagIds: live?.tagIds,
   };
@@ -189,6 +195,10 @@ async function handleAnalyze(): Promise<void> {
       else progress.hide();
     };
 
+    if (competitorAppids.length) {
+      setStatus('Loading competitor tags...');
+      input.competitors = await resolveCompetitors(competitorAppids);
+    }
     const result = await recommend(input, onProgress, model);
     renderResults(result);
     setStatus('Analysis complete', 'success');

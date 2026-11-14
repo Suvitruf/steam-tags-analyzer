@@ -52,6 +52,9 @@ export interface RecommendationInput {
   mainTag?: string;
   appid?: number;
   competitorAppids?: number[];
+  /** Resolved snapshots, including failures; when supplied these replace
+   * competitorAppids. The UI loads live data; otherwise the engine stays local. */
+  competitors?: CompetitorEvidence[];
   priceBucket?: string;
   /**
    * For a game looked up live on Steam: its name + current tag IDs in store
@@ -72,6 +75,15 @@ export interface RecommendationInput {
    * it embeds with transformers.js directly instead of the web worker.
    */
   queryEmbedding?: Float32Array;
+}
+
+export interface CompetitorEvidence {
+  appid: number;
+  name: string;
+  tagIds: number[];
+  source: 'dataset' | 'live' | 'unavailable';
+  /** Why this competitor could not contribute; shown alongside the results. */
+  issue?: string;
 }
 
 /**
@@ -139,6 +151,8 @@ export interface SimilarGame {
 }
 
 export interface RecommendationOutput {
+  /** Which named competitors contributed tags, and which could not be loaded. */
+  competitors?: CompetitorEvidence[];
   primaryTags: TagRecommendation[];
   secondaryTags: TagRecommendation[];
   avoidTags: TagRecommendation[];

@@ -55,10 +55,10 @@ function lookupError(appid: number, status: number): string {
  * edge cache and the browser's own HTTP cache — the audit's "refresh from
  * Steam" — and the Worker stores the result for everyone else.
  */
-export async function fetchLiveApp(appid: number, opts: { fresh?: boolean } = {}): Promise<LiveApp> {
+export async function fetchLiveApp(appid: number, opts: { fresh?: boolean; signal?: AbortSignal } = {}): Promise<LiveApp> {
   if (!liveLookupEnabled) throw new Error('Live Steam lookup is not configured');
   const url = `${STEAM_PROXY_URL}/app/${appid}${opts.fresh ? '?fresh=1' : ''}`;
-  const res = await fetch(url, opts.fresh ? { cache: 'no-store' } : undefined);
+  const res = await fetch(url, { ...(opts.fresh ? { cache: 'no-store' } : {}), signal: opts.signal });
   if (!res.ok) throw new Error(lookupError(appid, res.status));
   const data = (await res.json()) as WorkerAppResponse;
   const tagIds = Array.isArray(data.tags)

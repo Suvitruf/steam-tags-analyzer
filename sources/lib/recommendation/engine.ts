@@ -1,4 +1,5 @@
 import { normalizeIntentDescription, intentScore, suppressSubsumedIntents, INTENT_STATED } from './intent';
+import { competitorOverlap, localCompetitors, normalizeCompetitors } from './competitors';
 import type {
   CurrentTagSignal,
   RecommendationInput,
@@ -17,7 +18,6 @@ import {
   getAppTags,
   getAppTagsForApps,
   getGameInfoForApps,
-  getCompetitorTagOverlap,
   getExemplarGamesForTags,
   getAllTagEmbeddings,
   getTagStats,
@@ -66,7 +66,7 @@ const AVOID_LIMIT = 5;
 const INTENT_WEIGHT = 0.4;
 
 // How strongly a tag shared by the user's named competitors boosts its score.
-// competitorOverlap is the fraction of competitors carrying the tag [0,1], so a
+// competitorOverlap is the fraction of usable competitors carrying the tag [0,1], so a
 // tag every competitor uses gets up to +30%. Only applies when the user
 // provides competitor App IDs; otherwise the factor is 1.0.
 const COMPETITOR_WEIGHT = 0.3;
@@ -345,14 +345,11 @@ export async function recommend(
     });
   }
 
-  let competitorOverlapMap = new Map<number, number>();
-  if (input.competitorAppids && input.competitorAppids.length > 0) {
-    const competitorTags = getCompetitorTagOverlap(input.competitorAppids);
-    const totalCompetitors = input.competitorAppids.length;
-    for (const ct of competitorTags) {
-      competitorOverlapMap.set(ct.tag_id, ct.overlap_count / totalCompetitors);
-    }
-    onProgress?.('Competitor analysis', `${competitorTags.length} tags from ${totalCompetitors} competitors`);
+  const competitors = normalizeCompetitors(input.competitors ?? localCompetitors(input.competitorAppids ?? []));
+  const competitorOverlapMap = competitorOverlap(competitors);
+  if (competitors.length) {
+    const used = competitors.filter(c => c.source !== 'unavailable').length;
+    onProgress?.('Competitor analysis', `${competitorOverlapMap.size} tags from ${used} competitors with tag data`);
   }
 
   // Per-candidate inputs that don't depend on the chosen segment.
@@ -530,6 +527,7 @@ export async function recommend(
   onProgress?.('Complete');
 
   return {
+    competitors,
     primaryTags: primary,
     secondaryTags: secondary,
     avoidTags: avoid,
@@ -582,7 +580,7 @@ function generateExplanation(
   }
 
   if (c.competitorOverlap > 0.5) {
-    parts.push(`shared by ${(c.competitorOverlap * 100).toFixed(0)}% of your competitors`);
+    parts.push(`shared by ${(c.competitorOverlap * 100).toFixed(0)}% of competitors with tag data`);
   }
 
   if (c.similarity > 0.7) {

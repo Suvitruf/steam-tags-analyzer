@@ -3,7 +3,7 @@
 // Every Steam-sourced string — game names, exemplar names, tag names and the
 // explanations that embed them — goes through escapeHtml; the only raw
 // interpolations are numbers and our own literals.
-import type { ExemplarBasis, RecommendationOutput, TagRecommendation } from '../types';
+import type { CompetitorEvidence, ExemplarBasis, RecommendationOutput, TagRecommendation } from '../types';
 import { escapeHtml, tagPageUrl, storeUrl, renderSimilarGames } from './helpers';
 
 export function renderResultsHtml(output: RecommendationOutput): string {
@@ -32,6 +32,7 @@ export function renderResultsHtml(output: RecommendationOutput): string {
     ${appInfo}
     ${segmentInfo}
     ${evidenceInfo}
+    ${renderCompetitors(output.competitors ?? [])}
     <div class="results-grid">
       <div class="result-section result-primary">
         <h3>Recommended Primary Tags</h3>
@@ -50,6 +51,23 @@ export function renderResultsHtml(output: RecommendationOutput): string {
   `;
 }
 
+function renderCompetitors(competitors: CompetitorEvidence[]): string {
+  if (!competitors.length) return '';
+  const used = competitors.filter(c => c.source !== 'unavailable' && c.tagIds.length);
+  const skipped = competitors.filter(c => c.source === 'unavailable' || !c.tagIds.length);
+  const game = (c: CompetitorEvidence) => {
+    const label = c.name === `App ${c.appid}` ? c.name : `${c.name} (App ${c.appid})`;
+    return `<a href="${escapeHtml(storeUrl(c.appid))}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`;
+  };
+  const included = used.length
+    ? `<p>Included: ${used.map(c => `${game(c)} (${c.source === 'live' ? 'Steam' : 'dataset'})`).join(', ')}.</p>`
+    : '<p>No competitor bonus was applied.</p>';
+  const missing = skipped.length
+    ? `<p>Not counted: ${skipped.map(c => `${game(c)} — ${escapeHtml(c.issue ?? 'No tag data available.')}`).join('; ')}.</p>`
+    : '';
+  return `<div class="competitor-evidence similar-games-note"><p><strong>Competitor tags: ${used.length} of ${competitors.length} games included.</strong> Shared-tag percentages use only included games.</p>${included}${missing}</div>`;
+}
+
 // The specific ways this result can be weak, instead of one made-up
 // percentage (the old "Confidence: 80%" multiplied three heuristics and
 // ignored every other failure mode).
@@ -62,7 +80,7 @@ export function evidenceCaveats(output: RecommendationOutput): string[] {
     out.push(`Small segment (${output.segment.game_count} games): lifts are shrunk toward 1 and carry little weight.`);
   }
   if (!output.neighborEvidenceAvailable) {
-    out.push('Similar-game tag data is unavailable, so these recommendations rest on the description alone.');
+    out.push('Similar-game tag data is unavailable, so no nearest-game tag votes were used.');
   }
   if (output.primaryTags.length === 0) {
     out.push('No tag cleared the primary relevance bar; a longer, gameplay-focused description usually helps.');
