@@ -62,7 +62,7 @@ function buildUI(container: HTMLElement): void {
       <select id="audit-model-select">${modelOptions}</select>
     </div>
 
-    <div id="audit-status" class="status status-info">Loading database...</div>
+    <div id="audit-status" class="status status-info">Loading game data...</div>
     <div id="audit-progress" class="progress"></div>
 
     <form id="audit-form" class="analyzer-form">
@@ -299,10 +299,10 @@ export async function initAuditPage(container: HTMLElement): Promise<void> {
   progress = new ProgressBar($('#audit-progress'));
 
   try {
-    setStatus('Loading database...');
+    setStatus('Loading game data...');
     await ensureDatabase(e => {
-      if (e.phase === 'download') progress.set('Downloading database', e.loaded, e.total);
-      else progress.busy('Opening database');
+      if (e.phase === 'download') progress.set('Downloading game data', e.loaded, e.total);
+      else progress.busy('Opening game data');
     });
     progress.hide();
     setStatus('Ready', 'success');

@@ -40,15 +40,31 @@ This project is not affiliated with Valve or Steam.
 
 ## How it runs
 
-The application runs in the browser. It reads the browser SQLite database, and Transformers.js performs embedding inference in a Web Worker. The recommendation engine ranks relevant tags against comparable games.
+The application runs in the browser. The analyzer and audit prefer an inference pack: compact game/tag data plus tables for the selected model. Transformers.js performs embedding inference in a Web Worker. The recommendation engine ranks relevant tags against comparable games.
 
 Large runtime assets are downloaded separately:
 
-- browser database;
+- versioned inference packs and App-ID detail files, with the browser database as a compatibility fallback;
 - embedding models, rankers, and game vectors;
 - immutable analytics snapshots and their manifest.
 
-The analyzer and audit can download substantial data on first use. Analytics pages load smaller JSON snapshots and selected cohorts. Data and models are needed at runtime.
+The pack separates nightly game data from tables tied to a trained model set.
+Descriptions and store fields load when a game is looked up or audited. Files
+are verified against SHA-256 hashes and cached under immutable URLs; the
+manifest pins one consistent snapshot per visit. sql.js loads only for the
+legacy database path when the pack manifest is not yet available.
+
+On the November 2026 snapshot, the core and gte-base tables total **8.68 MB
+gzip**, replacing the **39.3 MB** browser database download. Encoder, ranker
+and game-vector downloads are additional. The analyzer and audit can still
+download substantial data on first use. Analytics pages load smaller JSON
+snapshots and selected cohorts. Data and models are needed at runtime.
+
+`npm run test:analyzer` checks the pack reader, lazy details, matched-set
+fingerprints, caching/offline behavior and integrity failures using small
+synthetic fixtures. It needs no private database or model artifacts.
+`VITE_INFERENCE_MANIFEST_URL` can point a local build at another compatible
+manifest; otherwise the client uses the configured CDN.
 
 ## Database snapshots
 

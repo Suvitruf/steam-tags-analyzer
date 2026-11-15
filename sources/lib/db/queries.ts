@@ -1,3 +1,5 @@
+import { inferenceStore } from '../inference/store';
+import { loadInferenceDetails } from '../inference/loader';
 import { query, queryOne } from './client';
 import type { App, Tag, AppTag, Segment, TagScore, ExemplarBasis } from '../types';
 
@@ -7,10 +9,12 @@ import type { App, Tag, AppTag, Segment, TagScore, ExemplarBasis } from '../type
 const SEGMENT_MEMBERSHIP_MAX_RANK = 5;
 
 export function getAllTags(): Tag[] {
+  const pack = inferenceStore(); if (pack) return pack.getAllTags();
   return query<Tag>('SELECT tag_id, name, normalized_name, is_active FROM tags WHERE is_active = 1 ORDER BY name');
 }
 
 export function getSegments(): Segment[] {
+  const pack = inferenceStore(); if (pack) return pack.getSegments();
   return query<Segment>(
     `SELECT s.segment_id, s.main_tag_id, t.name as main_tag_name,
             s.release_year, s.price_bucket, s.game_count
@@ -21,6 +25,7 @@ export function getSegments(): Segment[] {
 }
 
 export function findSegment(mainTagId: number, priceBucket?: string | null): Segment | null {
+  const pack = inferenceStore(); if (pack) return pack.findSegment(mainTagId, priceBucket);
   if (priceBucket) {
     const seg = queryOne<Segment>(
       `SELECT s.segment_id, s.main_tag_id, t.name as main_tag_name,
@@ -44,6 +49,7 @@ export function findSegment(mainTagId: number, priceBucket?: string | null): Seg
 }
 
 export function getTagScoresForSegment(segmentId: number): TagScore[] {
+  const pack = inferenceStore(); if (pack) return pack.getTagScoresForSegment(segmentId);
   return query<TagScore>(
     `SELECT ts.segment_id, ts.tag_id, t.name as tag_name,
             ts.success_lift, ts.confidence, ts.sample_size,
@@ -57,6 +63,7 @@ export function getTagScoresForSegment(segmentId: number): TagScore[] {
 }
 
 export function searchApps(searchQuery: string, limit = 20): App[] {
+  const pack = inferenceStore(); if (pack) return pack.searchApps(searchQuery, limit);
   return query<App>(
     `SELECT appid, name, type, release_date, price_usd, developer, publisher,
             is_released, short_description, genres, categories
@@ -68,6 +75,7 @@ export function searchApps(searchQuery: string, limit = 20): App[] {
 }
 
 export function getAppById(appid: number): App | null {
+  const pack = inferenceStore(); if (pack) return pack.getAppById(appid);
   return queryOne<App>(
     `SELECT appid, name, type, release_date, price_usd, developer, publisher,
             is_released, short_description, genres, categories
@@ -77,6 +85,7 @@ export function getAppById(appid: number): App | null {
 }
 
 export function getAppTags(appid: number): AppTag[] {
+  const pack = inferenceStore(); if (pack) return pack.getAppTags(appid);
   return query<AppTag>(
     `SELECT at.appid, at.tag_id, t.name as tag_name, at.rank
      FROM app_tags at
@@ -93,6 +102,7 @@ function hasTable(name: string): boolean {
 
 /** When the dataset last observed this game's tag list (ISO date-time), or null when it has none. */
 export function getAppTagsCollectedAt(appid: number): string | null {
+  const pack = inferenceStore(); if (pack) return pack.getAppTagsCollectedAt(appid);
   // Exports since 2026-11 carry one observation time per game;
   // earlier ones stamp every tag row.
   const row = queryOne<{ collected_at: string | null }>(
@@ -110,6 +120,7 @@ export function getAppTagsCollectedAt(appid: number): string | null {
  * these changes with no migration notice (see the /tag-changes/ page).
  */
 export function getRetiredTags(tagIds: number[]): Array<{ tag_id: number; name: string; removed_at: string | null }> {
+  const pack = inferenceStore(); if (pack) return pack.getRetiredTags(tagIds);
   if (tagIds.length === 0) return [];
   const placeholders = tagIds.map(() => '?').join(',');
   return query(
@@ -124,6 +135,7 @@ export function getRetiredTags(tagIds: number[]): Array<{ tag_id: number; name: 
 }
 
 export function getCompetitorTagOverlap(appids: number[]): Array<{ tag_id: number; tag_name: string; overlap_count: number; avg_rank: number }> {
+  const pack = inferenceStore(); if (pack) return pack.getCompetitorTagOverlap(appids);
   if (appids.length === 0) return [];
 
   const placeholders = appids.map(() => '?').join(',');
@@ -141,6 +153,7 @@ export function getCompetitorTagOverlap(appids: number[]): Array<{ tag_id: numbe
 }
 
 export function findTagByName(name: string): Tag | null {
+  const pack = inferenceStore(); if (pack) return pack.findTagByName(name);
   return queryOne<Tag>(
     'SELECT tag_id, name, normalized_name, is_active FROM tags WHERE normalized_name = ?',
     [name.toLowerCase().trim()]
@@ -169,6 +182,7 @@ export function getExemplarGamesForTags(
   limit = 3,
   opts: { excludeAppid?: number | null; nearAppids?: number[] } = {}
 ): { basis: ExemplarBasis; games: Map<number, Array<{ name: string; appid: number }>> } {
+  const pack = inferenceStore(); if (pack) return pack.getExemplarGamesForTags(segmentId, tagIds, limit, opts);
   const collect = (rows: Array<{ tag_id: number; name: string; appid: number }>) => {
     const games = new Map<number, Array<{ name: string; appid: number }>>();
     for (const r of rows) {
@@ -240,6 +254,7 @@ function blobToFloat32Array(blob: Uint8Array): Float32Array {
 }
 
 export function getAllTagEmbeddings(modelName: string): TagEmbedding[] {
+  const pack = inferenceStore(); if (pack) return pack.getAllTagEmbeddings(modelName);
   const rows = query<{ tag_id: number; tag_name: string; embedding: Uint8Array }>(
     `SELECT te.tag_id, t.name as tag_name, te.embedding
      FROM tag_embeddings te
@@ -255,6 +270,7 @@ export function getAllTagEmbeddings(modelName: string): TagEmbedding[] {
 }
 
 export function getTagStats(tagIds: number[]): Map<number, TagStats> {
+  const pack = inferenceStore(); if (pack) return pack.getTagStats(tagIds);
   if (tagIds.length === 0) return new Map();
   const placeholders = tagIds.map(() => '?').join(',');
   const rows = query<TagStats>(
@@ -270,6 +286,7 @@ export function getTagStats(tagIds: number[]): Map<number, TagStats> {
 
 // Tags (with rank) for many apps at once — for aggregating kNN neighbors' tags.
 export function getAppTagsForApps(appids: number[]): Map<number, Array<{ tag_id: number; rank: number }>> {
+  const pack = inferenceStore(); if (pack) return pack.getAppTagsForApps(appids);
   const map = new Map<number, Array<{ tag_id: number; rank: number }>>();
   if (appids.length === 0) return map;
   const placeholders = appids.map(() => '?').join(',');
@@ -287,6 +304,7 @@ export function getAppTagsForApps(appids: number[]): Map<number, Array<{ tag_id:
 
 // Name + review count for many apps at once — for the similar-games output.
 export function getGameInfoForApps(appids: number[]): Map<number, { name: string; reviews: number }> {
+  const pack = inferenceStore(); if (pack) return pack.getGameInfoForApps(appids);
   const map = new Map<number, { name: string; reviews: number }>();
   if (appids.length === 0) return map;
   const placeholders = appids.map(() => '?').join(',');
@@ -301,10 +319,19 @@ export function getGameInfoForApps(appids: number[]): Map<number, { name: string
 }
 
 export function getTagsByIds(tagIds: number[]): Tag[] {
+  const pack = inferenceStore(); if (pack) return pack.getTagsByIds(tagIds);
   if (tagIds.length === 0) return [];
   const placeholders = tagIds.map(() => '?').join(',');
   return query<Tag>(
     `SELECT tag_id, name, normalized_name, is_active FROM tags WHERE tag_id IN (${placeholders})`,
     tagIds
   );
+}
+
+/** Load the snapshot description/store fields only for an explicit App-ID lookup. */
+export async function loadAppById(appid: number): Promise<App | null> {
+  if (inferenceStore()) {
+    await loadInferenceDetails(appid);
+  }
+  return getAppById(appid);
 }

@@ -1,15 +1,16 @@
-// Shared loaders for the heavy runtime artifacts (DB, ranker, embedding
-// model), memoized per model so the analyzer and the audit page — both in
+// Shared loaders for runtime data (inference pack or legacy DB), ranker and embedding
+// model, memoized per model so the analyzer and the audit page — both in
 // app.js — never fetch the same thing twice and switching models only reloads
-// what changed. The database loads when a page opens; a model's files load
+// what changed. The dataset loads when a page opens; a model's files load
 // right after it through ensureModel, while the visitor reads and types, so the
 // first click finds them.
+import { loadInference, loadInferenceModel, InferenceManifestUnavailable } from './inference/loader';
 import { loadDatabase, type DatabaseLoadProgress } from './db/client';
 import { loadRanker } from './scoring/ranker';
 import { loadEmbeddingModel, embed, type ProgressCallback } from './llm/engine';
 import { getCachedGameVectors } from './recommendation/engine';
 import { verifyMatchedSet, currentSetId, type MatchedSetReport } from './matched-set';
-import { DB_URL, DB_GZ_URL, rankerUrl, modelsBase, GAME_VECTOR_MODELS } from './config';
+import { DB_URL, DB_GZ_URL, INFERENCE_MANIFEST_URL, rankerUrl, modelsBase, GAME_VECTOR_MODELS } from './config';
 import { FetchError, canInflate, type ByteProgress } from './fetch-progress';
 import type { GameVectors } from './llm/game-knn';
 
@@ -37,12 +38,19 @@ export function ensureDatabase(onProgress?: DatabaseLoadProgress): Promise<void>
   return dbPromise;
 }
 
-// The gzip copy is a third of the bytes; a browser that cannot inflate a
-// stream takes the plain file, and so does everyone while the compressed copy
-// is not on the CDN yet (a deploy ships the browser before the first export
-// that publishes both).
+// Prefer the pack. An unpublished manifest keeps the browser-first rollout
+// compatible with the existing CDN; a corrupt/published pack fails visibly.
+// Legacy browsers without stream inflation use the plain database.
 async function fetchDatabase(onProgress: DatabaseLoadProgress): Promise<void> {
   if (canInflate()) {
+    try {
+      await loadInference(INFERENCE_MANIFEST_URL, (loaded, total) => onProgress({ phase: 'download', loaded, total }));
+      onProgress({ phase: 'open' });
+      return;
+    } catch (err) {
+      if (!(err instanceof InferenceManifestUnavailable)) throw err;
+      console.warn('No inference manifest on the CDN; loading the database.');
+    }
     try {
       await loadDatabase(DB_GZ_URL, onProgress);
       return;
@@ -56,7 +64,7 @@ async function fetchDatabase(onProgress: DatabaseLoadProgress): Promise<void> {
 
 export async function ensureRanker(modelKey: string, onProgress?: ByteProgress): Promise<void> {
   if (rankerLoadedFor === modelKey) return;
-  // The database (loaded first; both pages gate on it) names the set whose
+  // The dataset (loaded first; both pages gate on it) names the set whose
   // files to fetch; an unstamped database resolves to the legacy flat paths.
   await loadRanker(rankerUrl(modelKey, currentSetId(modelKey)), onProgress);
   rankerLoadedFor = modelKey;
@@ -121,6 +129,7 @@ let modelQueue: Promise<void> = Promise.resolve();
  */
 export function ensureModel(modelKey: string, progress: ModelProgress = {}): Promise<MatchedSetReport> {
   const run = modelQueue.then(async () => {
+    await loadInferenceModel(modelKey, progress.index);
     await ensureRanker(modelKey, progress.ranker);
     await ensureEmbeddingModel(modelKey, progress.model);
     return ensureMatchedSet(modelKey, progress.index);

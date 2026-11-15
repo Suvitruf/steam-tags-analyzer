@@ -18,7 +18,7 @@
 import type { CurrentTagSignal, ExemplarBasis, Segment, SimilarGame, TagRecommendation, AppTag } from '../types';
 import { thinSignalSim } from '../matched-set';
 import { recommend, type RecommendationProgressCallback } from './engine';
-import { getAppById, getTagStats, getAppTags, getAppTagsCollectedAt, getTagsByIds } from '../db/queries';
+import { loadAppById, getTagStats, getAppTags, getAppTagsCollectedAt, getTagsByIds } from '../db/queries';
 import { DEFAULT_MODEL_KEY } from '../llm/models';
 
 export type AuditBucket = 'identity' | 'feature' | 'neutral' | 'weak' | 'suspicious' | 'retired';
@@ -329,7 +329,7 @@ export async function auditGame(
   onProgress?: RecommendationProgressCallback,
   modelKey: string = DEFAULT_MODEL_KEY
 ): Promise<TagAudit> {
-  const app = getAppById(input.appid);
+  const app = await loadAppById(input.appid);
   if (!app && !input.live) throw new Error(`App ID ${input.appid} isn't in the dataset`);
   if (app && input.live && input.live.tagIds.length === 0) {
     throw new Error('Steam returned no tags for this page right now; audit the dataset snapshot instead');

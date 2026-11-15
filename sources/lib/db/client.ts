@@ -1,5 +1,5 @@
-import initSqlJs, { Database } from 'sql.js';
-import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
+import type { Database } from 'sql.js';
+import { setInferenceStore } from '../inference/store';
 import { fetchBytes } from '../fetch-progress';
 
 let db: Database | null = null;
@@ -10,6 +10,9 @@ export type DatabaseLoadEvent =
 export type DatabaseLoadProgress = (event: DatabaseLoadEvent) => void;
 
 export async function loadDatabase(dbUrl: string, onProgress?: DatabaseLoadProgress): Promise<Database> {
+  const [{ default: initSqlJs }, { default: sqlWasmUrl }] = await Promise.all([
+    import('sql.js'), import('sql.js/dist/sql-wasm.wasm?url'),
+  ]);
   const SQL = await initSqlJs({
     locateFile: () => sqlWasmUrl,
   });
@@ -21,7 +24,9 @@ export async function loadDatabase(dbUrl: string, onProgress?: DatabaseLoadProgr
   );
   // sql.js adopts the buffer without copying; the first queries pay the parse.
   onProgress?.({ phase: 'open' });
+  db?.close();
   db = new SQL.Database(bytes);
+  setInferenceStore(null);
   return db;
 }
 

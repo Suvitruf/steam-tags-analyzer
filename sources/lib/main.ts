@@ -1,4 +1,4 @@
-import { getSegments, getAppById, getAppTags, getRetiredTags } from './db/queries';
+import { getSegments, loadAppById, getAppTags, getRetiredTags } from './db/queries';
 import { recommend, type RecommendationProgressCallback } from './recommendation/engine';
 import { parseCompetitorAppids, resolveCompetitors } from './recommendation/competitors';
 import { listModels, DEFAULT_MODEL_KEY } from './llm/models';
@@ -13,6 +13,7 @@ import { fetchLiveApp, liveLookupEnabled } from './live';
 
 interface LiveApp { appid: number; name: string; tagIds: number[] }
 let liveApp: LiveApp | null = null;    // last successful live lookup, if any
+let appLookupSequence = 0;
 
 interface AppState {
   dbLoaded: boolean;
@@ -106,6 +107,7 @@ function showRetiredTagWarning(tagIds: number[]): void {
 }
 
 async function handleAppIdLookup(): Promise<void> {
+  const lookupSequence = ++appLookupSequence;
   liveApp = null;
   $('#retired-warning')?.replaceChildren();
   const appidInput = $('#appid') as HTMLInputElement | null;
@@ -114,7 +116,13 @@ async function handleAppIdLookup(): Promise<void> {
   if (isNaN(id)) return;
 
   // 1. local dataset
-  const app = getAppById(id);
+  let app;
+  try { app = await loadAppById(id); } catch (err) {
+    if (lookupSequence !== appLookupSequence) return;
+    setStatus(`Game lookup error: ${(err as Error).message}`, 'error');
+    return;
+  }
+  if (lookupSequence !== appLookupSequence) return;
   if (app) {
     if (desc && app.short_description && !desc.value.trim()) desc.value = app.short_description;
     setStatus(`Loaded "${app.name}" — its tags will be marked in the results`, 'success');
@@ -130,11 +138,13 @@ async function handleAppIdLookup(): Promise<void> {
   try {
     setStatus(`Looking up App ID ${id} on Steam…`, 'info');
     const data = await fetchLiveApp(id);
+    if (lookupSequence !== appLookupSequence) return;
     liveApp = { appid: id, name: data.name, tagIds: data.tagIds };
     if (desc && data.short_description && !desc.value.trim()) desc.value = data.short_description;
     setStatus(`Live: "${data.name}" — fetched from Steam; its tags will be marked`, 'success');
     showRetiredTagWarning(liveApp.tagIds);
   } catch (err) {
+    if (lookupSequence !== appLookupSequence) return;
     setStatus(`Steam lookup error: ${(err as Error).message}`, 'error');
   }
 }
@@ -232,7 +242,7 @@ function buildUI(): void {
       <select id="model-select">${modelOptions}</select>
     </div>
 
-    <div id="status" class="status status-info">Loading database...</div>
+    <div id="status" class="status status-info">Loading game data...</div>
     <div id="progress" class="progress"></div>
     <div id="retired-warning"></div>
 
@@ -285,10 +295,10 @@ async function init(): Promise<void> {
   progress = new ProgressBar($('#progress'));
 
   try {
-    setStatus('Loading database...');
+    setStatus('Loading game data...');
     await ensureDatabase(e => {
-      if (e.phase === 'download') progress.set('Downloading database', e.loaded, e.total);
-      else progress.busy('Opening database');
+      if (e.phase === 'download') progress.set('Downloading game data', e.loaded, e.total);
+      else progress.busy('Opening game data');
     });
     progress.hide();
     state.dbLoaded = true;

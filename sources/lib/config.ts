@@ -1,10 +1,11 @@
 // --- hosting config ---
-// The big runtime artifacts (SQLite DB ~300MB, quantized ONNX models, ranker
+// The big runtime artifacts (inference packs, fallback DB, ONNX models, ranker
 // JSONs) are too large for the git repo / GitHub Pages, so they live in the
 // R2 bucket behind this CDN domain (bucket "projects", prefix "steam-tags/").
 // Local dev uses the same CDN copies — nothing big needs to exist locally.
 //
 // Layout (mirrors what scripts upload / the GitHub Action refreshes):
+//   {ASSET_BASE}/inference/manifest.json             — pinned inference files
 //   {ASSET_BASE}/steam-tags.db                       — browser database
 //   {ASSET_BASE}/steam-tags.db.gz                    — the same, gzip-compressed
 //   {ASSET_BASE}/data/[{set id}/]ranker-{model}.json — LightGBM rankers
@@ -14,6 +15,8 @@
 //      tokenizer_config.json and onnx/model_quantized.onnx per model)
 export const ASSET_BASE = 'https://projects.cdn.aapanasik.com/steam-tags';
 
+export const INFERENCE_MANIFEST_URL = import.meta.env?.VITE_INFERENCE_MANIFEST_URL || `${ASSET_BASE}/inference/manifest.json`;
+
 export const DB_URL = `${ASSET_BASE}/steam-tags.db`;
 // The compressed copy is what a browser that can inflate a stream loads
 // (about a third of the bytes). The plain file stays for
@@ -21,7 +24,7 @@ export const DB_URL = `${ASSET_BASE}/steam-tags.db`;
 export const DB_GZ_URL = `${DB_URL}.gz`;
 
 // A stamped set's files live under its set id on the CDN: the
-// database names the set, so a browser that cached the previous encoder (the
+// dataset names the set, so a browser that cached the previous encoder (the
 // Cache API keys transformers.js downloads by URL) switches the moment the new
 // database lands, and one set's files are never paired with another's tables.
 // Unstamped (legacy) sets keep the flat paths.

@@ -13,6 +13,7 @@
 //   - the served encoder reproduces the manifest's probe embedding.
 // A DB without a manifest row (artifacts from before the stamp) is
 // "unverified", not a failure.
+import { inferenceStore } from './inference/store';
 import { query, queryOne } from './db/client';
 import { getRankerSetId } from './scoring/ranker';
 import type { GameVectors } from './llm/game-knn';
@@ -59,6 +60,7 @@ export interface MatchedSetReport {
 }
 
 export function readModelSet(modelKey: string): ModelSetRow | null {
+  const pack = inferenceStore(); if (pack) return pack.manifest.models[modelKey]?.row ?? null;
   try {
     return queryOne<ModelSetRow>('SELECT * FROM model_sets WHERE model_name = ?', [modelKey]);
   } catch {
@@ -66,7 +68,7 @@ export function readModelSet(modelKey: string): ModelSetRow | null {
   }
 }
 
-/** The set id the loaded database names for a model, or null for an unstamped
+/** The set id the loaded dataset names for a model, or null for an unstamped
  * set. The loaders address a set's CDN files by it (config.ts). */
 export function currentSetId(modelKey: string): string | null {
   return readModelSet(modelKey)?.set_id ?? null;
@@ -97,7 +99,8 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
 
 /** sha256 over (tag_id uint32 LE, raw embedding blob) in tag_id order — model_set.centroids_fingerprint. */
 export async function centroidsFingerprint(modelKey: string): Promise<string> {
-  const rows = query<{ tag_id: number; embedding: Uint8Array }>(
+  const model = inferenceStore()?.model(modelKey);
+  const rows = model ? model.metadata.centroids.map(r => ({ tag_id: r.tagId, embedding: model.embeddings.subarray(r.offset, r.offset + r.length) })) : query<{ tag_id: number; embedding: Uint8Array }>(
     'SELECT tag_id, embedding FROM tag_embeddings WHERE model_name = ? ORDER BY tag_id', [modelKey]
   );
   let length = 0;
@@ -114,7 +117,10 @@ export async function centroidsFingerprint(modelKey: string): Promise<string> {
 
 /** sha256 over (tag_id uint32, game_count int64, avg_rank/idf/top1_rate float64, NULL as NaN) LE in tag_id order — model_set.tag_stats_fingerprint. */
 export async function tagStatsFingerprint(): Promise<string> {
-  const rows = query<{ tag_id: number; game_count: number | null; avg_rank: number | null; idf: number | null; top1_rate: number | null }>(
+  const pack = inferenceStore();
+  const firstModel = pack?.models.values().next().value;
+  if (pack && !firstModel) throw new Error('Inference model data not loaded');
+  const rows = firstModel ? firstModel.metadata.stats : query<{ tag_id: number; game_count: number | null; avg_rank: number | null; idf: number | null; top1_rate: number | null }>(
     'SELECT tag_id, game_count, avg_rank, idf, top1_rate FROM tag_stats ORDER BY tag_id'
   );
   const out = new Uint8Array(rows.length * 36);
