@@ -42,7 +42,7 @@ This project is not affiliated with Valve or Steam.
 
 ## How it runs
 
-The application runs in the browser. The analyzer and audit prefer an inference pack: compact game/tag data plus tables for the selected model. Transformers.js performs embedding inference in a Web Worker. The recommendation engine ranks relevant tags against comparable games.
+The application runs in the browser. The analyzer and locally calculated audits prefer an inference pack: compact game/tag data plus tables for the selected model. Transformers.js performs embedding inference in a Web Worker. The recommendation engine ranks relevant tags against comparable games.
 
 Large runtime assets are downloaded separately:
 
@@ -58,14 +58,30 @@ legacy database path when the pack manifest is not yet available.
 
 On the November 2026 snapshot, the core and gte-base tables total **8.68 MB
 gzip**, replacing the **39.3 MB** browser database download. Encoder, ranker
-and game-vector downloads are additional. The analyzer and audit can still
-download substantial data on first use. Analytics pages load smaller JSON
+and game-vector downloads are additional. The analyzer and audits without a
+ready-made result can still download substantial data on first use. Analytics pages load smaller JSON
 snapshots and selected cohorts. Data and models are needed at runtime.
+
+The audit page first checks for a precomputed result for the selected game and
+model. When available, it loads only the manifest, audit index and that result;
+no model, inference core or database is downloaded. The data pipeline prepares
+up to 1,000 of the most-reviewed eligible games using gte-base. A result is
+accepted only if its hashes, dataset snapshot, model set and audit-rule revision
+match. Its generation date and tag-observation date remain visible.
+
+Opening `/audit` alone loads no dataset or model. Missing, incompatible or
+unavailable saved results use the regular browser calculation. **Refresh from
+Steam** and `?live=1` always bypass saved audits. Shared links preserve a
+nondefault `model` parameter. Verified results are cached locally; repeat visits
+revalidate the manifest, and a network failure can reuse the last verified
+snapshot offline. Keep `AUDIT_REVISION` in `sources/lib/audit/precomputed.ts`
+aligned with the publisher and bump it when audit/scoring/intent rules change.
 
 `npm run test:analyzer` checks the pack reader, lazy details, matched-set
 fingerprints, caching/offline behavior and integrity failures using small
 synthetic fixtures. It also checks audit taxonomy/model coverage, independent
-evidence and rendered explanations. It needs no private database or model artifacts.
+evidence, rendered explanations, and precomputed-audit snapshot/revision checks,
+cache repair, offline reuse and fallbacks. It needs no private database or model artifacts.
 `VITE_INFERENCE_MANIFEST_URL` can point a local build at another compatible
 manifest; otherwise the client uses the configured CDN.
 
@@ -99,6 +115,9 @@ Client source code is available under the [MIT License](LICENSE). Steam data, tr
 ## Static tag pages
 
 Paid/free aggregate views require a data snapshot containing the corresponding population exports. Older snapshots report unavailable filtered data instead of showing all-game results. Static tag pages without JavaScript show the all-game snapshot.
+
+`npm ci` uses the pinned sharp 0.33.5 override and its npm-hosted native binaries
+to avoid the older GitHub/libvips installer.
 
 `npm run build` validates the current CDN analytics manifest and summary checksum, generates one HTML page per tag, builds the browser bundles, and checks the resulting site. No database, model files, API keys, or backend are needed at build time. `npm run dev` also supports `/tags/<id>-<name>/` routes.
 

@@ -1,9 +1,9 @@
 // Shared loaders for runtime data (inference pack or legacy DB), ranker and embedding
 // model, memoized per model so the analyzer and the audit page — both in
 // app.js — never fetch the same thing twice and switching models only reloads
-// what changed. The dataset loads when a page opens; a model's files load
-// right after it through ensureModel, while the visitor reads and types, so the
-// first click finds them.
+// what changed. The analyzer preloads the dataset and model while the visitor
+// types; the audit defers these until a ready-made result is unavailable or
+// a fresh Steam lookup is requested.
 import { loadInference, loadInferenceModel, InferenceManifestUnavailable } from './inference/loader';
 import { loadDatabase, type DatabaseLoadProgress } from './db/client';
 import { loadRanker } from './scoring/ranker';
@@ -124,8 +124,8 @@ let modelQueue: Promise<void> = Promise.resolve();
 /**
  * Everything an analysis with this model needs — ranker, encoder, game index
  * and the matched-set check — in order. Memoized parts resolve at once. The
- * pages call it when the database is open (so the first click finds the files
- * loaded) and again from the click, which then only waits its turn.
+ * analyzer calls it when the database is open and again from the click; the
+ * audit calls it only when local calculation is needed.
  */
 export function ensureModel(modelKey: string, progress: ModelProgress = {}): Promise<MatchedSetReport> {
   const run = modelQueue.then(async () => {

@@ -18,6 +18,7 @@ const bundled = await build({
       export { centroidsFingerprint, tagStatsFingerprint, readModelSet } from './sources/lib/matched-set';
       export { auditGame, classifyTag } from './sources/lib/recommendation/audit';
       export { renderTagRow } from './sources/lib/audit/ui';
+      export * from './sources/lib/audit/precomputed';
       export { loadRanker } from './sources/lib/scoring/ranker';
       export { GAME_VECTOR_MODELS } from './sources/lib/config';
     `,
@@ -118,7 +119,7 @@ async function environment(run) {
   const storage = {
     async match(url) { return entries.get(url)?.clone(); },
     async put(url, response) { entries.set(url, response.clone()); },
-    async delete(url) { return entries.delete(url); },
+    async delete(request) { return entries.delete(typeof request === 'string' ? request : request.url); },
     async keys() { return [...entries.keys()].map(url => new Request(url)); },
   };
   const network = async input => {
@@ -279,4 +280,115 @@ test('corrupt or incomplete published packs fail; only an absent manifest permit
   assert.throws(() => api.decodePack(valid.subarray(0, 10)), /Truncated/);
   new DataView(valid.buffer).setUint32(4, 2, true);
   assert.throws(() => api.decodePack(valid), /Unsupported/);
+}));
+
+// Build the saved envelope from the real public engine, using the same small
+// fixture as the pack tests. No private exporter or artifacts are required.
+async function readyAudit({ manifest, files, entries, requests }) {
+  await api.loadInference(BASE + 'manifest.json');
+  await api.loadInferenceModel(MODEL);
+  files.set(BASE + 'ranker.json', Buffer.from(JSON.stringify({ trees: [{ v: 0 }], feature_names: [] })));
+  await api.loadRanker(BASE + 'ranker.json');
+  const hadVectors = api.GAME_VECTOR_MODELS.delete(MODEL);
+  let audit;
+  try {
+    audit = JSON.parse(JSON.stringify(await api.auditGame({ appid: 10, queryEmbedding: new Float32Array([1, 0]) }, undefined, MODEL)));
+  } finally { if (hadVectors) api.GAME_VECTOR_MODELS.add(MODEL); }
+  const file = value => {
+    const body = Buffer.from(JSON.stringify(value)), sha256 = hash(body), compressed = gzipSync(body);
+    const ref = { path: `audits/${sha256}.gz`, sha256, bytes: body.length, gzipBytes: compressed.length };
+    files.set(BASE + ref.path, compressed);
+    return ref;
+  };
+  const metadata = {
+    version: 1, revision: api.AUDIT_REVISION, model: MODEL,
+    setId: manifest.models[MODEL].row.set_id, snapshot: await api.auditSnapshot(manifest, MODEL),
+    generatedAt: '2026-11-15T12:00:00Z',
+  };
+  const saved = { ...metadata, audit }, index = { ...metadata, apps: { 10: file(saved) } };
+  const publish = value => { manifest.audits = { [MODEL]: { revision: api.AUDIT_REVISION, file: file(value) } }; };
+  publish(index);
+  entries.clear(); requests.length = 0; api.setInferenceStore(null);
+  return { saved, index, file, publish };
+}
+
+test('ready audits match the real engine without loading data, reuse cache and work offline or without storage', () => environment(async env => {
+  const { saved } = await readyAudit(env), url = BASE + 'manifest.json';
+  env.entries.set(BASE + 'audits/obsolete.gz', new Response('old snapshot'));
+  assert.deepEqual(await api.loadPrecomputedAudit(10, MODEL, url), saved);
+  assert.equal(api.inferenceStore(), null, 'a hit must not initialize the inference store');
+  assert.equal(env.requests.length, 3, 'only manifest, index and selected audit');
+  assert.ok(env.requests.every(u => u === url || u.startsWith(BASE + 'audits/')));
+  assert.equal(env.entries.has(BASE + 'audits/obsolete.gz'), false, 'old snapshot entries are pruned');
+  const before = env.requests.length;
+  assert.deepEqual(await api.loadPrecomputedAudit(10, MODEL, url), saved);
+  assert.deepEqual(env.requests.slice(before), [url]);
+  globalThis.fetch = async () => { throw new TypeError('offline'); };
+  assert.deepEqual(await api.loadPrecomputedAudit(10, MODEL, url), saved);
+  globalThis.fetch = env.network;
+  Object.defineProperty(globalThis, 'caches', { configurable: true, value: { open: async () => { throw new Error('storage denied'); } } });
+  assert.deepEqual(await api.loadPrecomputedAudit(10, MODEL, url), saved);
+}));
+
+test('ready audits reject incompatible snapshots, revisions, models and malformed indexes', () => environment(async env => {
+  const { index, publish } = await readyAudit(env), url = BASE + 'manifest.json';
+  const original = structuredClone(env.manifest);
+  assert.equal(await api.loadPrecomputedAudit(20, MODEL, url), null);
+  assert.equal(await api.loadPrecomputedAudit(10, 'minilm', url), null);
+  assert.equal(await api.loadPrecomputedAudit(-1, MODEL, url), null);
+  for (const change of [
+    m => { delete m.audits; },
+    m => { m.audits[MODEL].revision = 'future'; },
+    m => { m.audits[MODEL].file.path = '../unexpected'; },
+    m => { m.core.sha256 = 'f'.repeat(64); m.core.path = `snapshots/${m.core.sha256}.gz`; },
+    m => { m.details[0] = m.details.find(r => r.sha256 !== m.details[0].sha256); },
+    m => { m.models[MODEL].row.notes = 'thin_signal_sim=0.1'; },
+    m => { m.models[MODEL].file.sha256 = 'f'.repeat(64); m.models[MODEL].file.path = `sets/${m.models[MODEL].row.set_id}/${'f'.repeat(64)}.gz`; },
+  ]) {
+    Object.assign(env.manifest, structuredClone(original)); change(env.manifest);
+    assert.equal(await api.loadPrecomputedAudit(10, MODEL, url), null);
+  }
+  Object.assign(env.manifest, structuredClone(original));
+  for (const change of [
+    i => { i.version = 2; }, i => { i.revision = 'future'; },
+    i => { i.setId = 'another-set'; }, i => { i.model = 'minilm'; },
+    i => { i.generatedAt = 'invalid'; }, i => { i.apps = []; },
+    i => { i.apps['010'] = i.apps[10]; }, i => { i.apps[10].bytes = 0; },
+  ]) {
+    const bad = structuredClone(index); change(bad); publish(bad);
+    assert.equal(await api.loadPrecomputedAudit(10, MODEL, url), null);
+  }
+  publish(index);
+  assert.ok(await api.loadPrecomputedAudit(10, MODEL, url), 'valid data recovers after incompatible results');
+}));
+
+test('ready audits repair corrupt cache, reject damaged or invalid results and fall back on network failure', () => environment(async env => {
+  const { saved, index, file, publish } = await readyAudit(env), url = BASE + 'manifest.json';
+  const resultUrl = BASE + index.apps[10].path;
+  assert.deepEqual(await api.loadPrecomputedAudit(10, MODEL, url), saved);
+  env.entries.set(resultUrl, new Response('damaged cache'));
+  assert.deepEqual(await api.loadPrecomputedAudit(10, MODEL, url), saved);
+  assert.equal(env.requests.at(-1), resultUrl);
+  const original = env.files.get(resultUrl);
+  env.entries.delete(resultUrl); env.files.set(resultUrl, Buffer.from('damaged network body'));
+  assert.equal(await api.loadPrecomputedAudit(10, MODEL, url), null);
+  env.files.set(resultUrl, original);
+  for (const change of [
+    s => { s.audit.app.appid = 20; }, s => { s.audit.app.live = true; },
+    s => { s.audit.tags[0].similarity = null; }, s => { s.audit.counts.identity = 999; },
+    s => { s.audit.signal = null; }, s => { s.audit.tags.push(s.audit.tags[0]); },
+    s => { s.version = 2; }, s => { s.model = 'minilm'; },
+    s => { s.setId = 'another-set'; }, s => { s.generatedAt = '2026-11-16T12:00:00Z'; },
+  ]) {
+    const bad = structuredClone(saved); change(bad);
+    publish({ ...index, apps: { 10: file(bad) } });
+    assert.equal(await api.loadPrecomputedAudit(10, MODEL, url), null, 'a valid hash cannot excuse invalid contents');
+  }
+  publish(index); env.entries.clear();
+  globalThis.fetch = async () => new Response('', { status: 404 });
+  assert.equal(await api.loadPrecomputedAudit(10, MODEL, url), null);
+  globalThis.fetch = async () => { throw new DOMException('Timeout', 'TimeoutError'); };
+  assert.equal(await api.loadPrecomputedAudit(10, MODEL, url), null);
+  globalThis.fetch = env.network;
+  assert.deepEqual(await api.loadPrecomputedAudit(10, MODEL, url), saved);
 }));

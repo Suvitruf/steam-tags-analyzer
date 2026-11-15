@@ -10,6 +10,8 @@ export interface PackManifest {
   core: FileRef;
   models: Record<string, { row: ModelRow; file: FileRef }>;
   details: FileRef[];
+  /** Optional ready-made audit indexes. Older clients simply ignore these. */
+  audits?: Record<string, { revision: string; file: FileRef }>;
 }
 export interface PackTag { tag_id: number; name: string; normalized_name: string; is_active: number }
 export interface PackSegment {

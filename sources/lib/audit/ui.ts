@@ -11,6 +11,7 @@ import {
 } from '../ui/helpers';
 import { ProgressBar, modelProgressHandler } from '../ui/progress';
 import type { TagRecommendation } from '../types';
+import { loadPrecomputedAudit, type SavedAudit } from './precomputed';
 
 const BUCKET_LABEL: Record<AuditBucket, string> = {
   identity: 'Identity',
@@ -64,7 +65,7 @@ function buildUI(container: HTMLElement): void {
       <select id="audit-model-select">${modelOptions}</select>
     </div>
 
-    <div id="audit-status" class="status status-info">Loading game data...</div>
+    <div id="audit-status" class="status status-success">Ready</div>
     <div id="audit-progress" class="progress"></div>
 
     <form id="audit-form" class="analyzer-form">
@@ -73,9 +74,9 @@ function buildUI(container: HTMLElement): void {
         <input type="text" id="audit-appid" placeholder="e.g. 1245620 or https://store.steampowered.com/app/1245620/">
       </div>
       <div class="form-actions">
-        <button type="submit" id="audit-btn" class="btn-analyze" disabled>Loading...</button>
+        <button type="submit" id="audit-btn" class="btn-analyze">Audit tags</button>
         ${liveLookupEnabled
-          ? `<button type="button" id="audit-refresh-btn" class="btn-secondary" disabled
+          ? `<button type="button" id="audit-refresh-btn" class="btn-secondary"
                title="Fetch the page's current tags and store features from Steam and audit those instead of the dataset snapshot">Refresh from Steam</button>`
           : ''}
       </div>
@@ -86,8 +87,8 @@ function buildUI(container: HTMLElement): void {
 }
 
 function setButtonsDisabled(disabled: boolean): void {
-  for (const id of ['#audit-btn', '#audit-refresh-btn']) {
-    const b = $(id) as HTMLButtonElement | null;
+  for (const id of ['#audit-btn', '#audit-refresh-btn', '#audit-model-select']) {
+    const b = $(id) as HTMLButtonElement | HTMLSelectElement | null;
     if (b) b.disabled = disabled;
   }
 }
@@ -100,18 +101,6 @@ function modelProgress(model: string): ModelProgress {
   };
 }
 
-// Background load of a model's files; a failure is left for the next audit to
-// retry and report.
-function warmModel(model: string): void {
-  ensureModel(model, modelProgress(model)).then(
-    () => progress.hide(),
-    err => {
-      progress.hide();
-      console.warn(`Preloading model ${model} failed; the next audit retries:`, (err as Error).message);
-    }
-  );
-}
-
 // `fresh`: fetch the page's current tags and store features from Steam even
 // when the dataset has this game, and audit those instead of the snapshot.
 async function run(appid: number, fresh = false): Promise<void> {
@@ -122,35 +111,48 @@ async function run(appid: number, fresh = false): Promise<void> {
   if (results) results.innerHTML = '';
 
   try {
-    const inDataset = getAppById(appid) !== null;
-    if (!inDataset && !liveLookupEnabled) {
-      throw new Error(`App ID ${appid} isn't in the dataset (live lookup not configured)`);
-    }
-    let live: LiveApp | undefined;
-    if (fresh || !inDataset) {
-      setStatus(fresh ? `Fetching the current store page for App ID ${appid} from Steam…` : `Looking up App ID ${appid} on Steam…`);
-      live = await fetchLiveApp(appid, { fresh });
-    }
+    setStatus(fresh ? 'Preparing a current Steam audit…' : 'Checking for a ready-made audit…');
+    const saved = fresh ? null : await loadPrecomputedAudit(appid, modelKey);
+    let audit: TagAudit;
+    if (saved) {
+      audit = saved.audit;
+    } else {
+      setStatus('Loading game data…');
+      await ensureDatabase(e => {
+        if (e.phase === 'download') progress.set('Downloading game data', e.loaded, e.total);
+        else progress.busy('Opening game data');
+      });
+      const inDataset = getAppById(appid) !== null;
+      if (!inDataset && !liveLookupEnabled) {
+        throw new Error(`App ID ${appid} isn't in the dataset (live lookup not configured)`);
+      }
+      let live: LiveApp | undefined;
+      if (fresh || !inDataset) {
+        setStatus(fresh ? `Fetching the current store page for App ID ${appid} from Steam…` : `Looking up App ID ${appid} on Steam…`);
+        live = await fetchLiveApp(appid, { fresh });
+      }
 
-    // Usually loaded already by the warm-up started when the database opened
-    // (runtime.ts); otherwise this waits its turn and the bar shows the download.
-    setStatus(`Loading model files (${modelKey})...`);
-    showMatchedSetWarning(await ensureModel(modelKey, modelProgress(modelKey)), $('#audit-status'));
-    progress.hide();
+      // Heavy files are only needed when no matching saved audit is available.
+      setStatus(`Loading model files (${modelKey})...`);
+      showMatchedSetWarning(await ensureModel(modelKey, modelProgress(modelKey)), $('#audit-status'));
+      progress.hide();
 
-    const audit = await auditGame(
-      { appid, live },
-      (stage, detail, bytes) => {
-        setStatus(`${stage}${detail ? ` — ${detail}` : ''}`);
-        if (bytes) progress.set('Downloading game index', bytes.loaded, bytes.total);
-        else progress.hide();
-      },
-      modelKey
-    );
-    render(audit);
+      audit = await auditGame(
+        { appid, live },
+        (stage, detail, bytes) => {
+          setStatus(`${stage}${detail ? ` — ${detail}` : ''}`);
+          if (bytes) progress.set('Downloading game index', bytes.loaded, bytes.total);
+          else progress.hide();
+        },
+        modelKey
+      );
+    }
+    render(audit, saved);
     // Shareable link to this exact audit.
     const url = new URL(location.href);
     url.searchParams.set('appid', String(appid));
+    if (modelKey === DEFAULT_MODEL_KEY) url.searchParams.delete('model');
+    else url.searchParams.set('model', modelKey);
     if (fresh) url.searchParams.set('live', '1');
     else url.searchParams.delete('live');
     history.replaceState(null, '', url);
@@ -235,7 +237,7 @@ function renderRecList(tags: TagRecommendation[], type: 'add' | 'avoid'): string
   </ol>`;
 }
 
-function render(audit: TagAudit): void {
+function render(audit: TagAudit, saved: SavedAudit | null = null): void {
   const container = $('#audit-results');
   if (!container) return;
 
@@ -266,6 +268,7 @@ function render(audit: TagAudit): void {
       ${sourceNote(audit)}
       &mdash; ${audit.tags.length} tags on the store page, ${segment}.
       <span class="audit-summary">${summary}</span></p>
+    ${saved ? `<p class="similar-games-note">Precomputed on ${escapeHtml(saved.generatedAt.slice(0, 10))} from the dataset snapshot.${liveLookupEnabled ? ' Use “Refresh from Steam” to check the current page.' : ''}</p>` : ''}
     ${snapshotNote(audit)}
     ${thin}
     <div class="result-section audit-section">
@@ -297,64 +300,44 @@ function render(audit: TagAudit): void {
 }
 
 export async function initAuditPage(container: HTMLElement): Promise<void> {
+  const params = new URLSearchParams(location.search);
+  const requestedModel = params.get('model');
+  if (listModels().some(model => model.key === requestedModel)) modelKey = requestedModel!;
   buildUI(container);
   progress = new ProgressBar($('#audit-progress'));
-
-  try {
-    setStatus('Loading game data...');
-    await ensureDatabase(e => {
-      if (e.phase === 'download') progress.set('Downloading game data', e.loaded, e.total);
-      else progress.busy('Opening game data');
-    });
-    progress.hide();
-    setStatus('Ready', 'success');
-    // The model's files load while the visitor types the App ID (runtime.ts).
-    warmModel(modelKey);
-
-    const btn = $('#audit-btn') as HTMLButtonElement | null;
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = 'Audit tags';
+  const input = $('#audit-appid') as HTMLInputElement | null;
+  const submit = (fresh: boolean) => {
+    const appid = parseAppIdInput(input?.value ?? '');
+    if (appid === null) {
+      setStatus('Enter a Steam App ID or a store page URL', 'error');
+      return;
     }
+    void run(appid, fresh);
+  };
+  $('#audit-form')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    submit(false);
+  });
+  const refreshBtn = $('#audit-refresh-btn') as HTMLButtonElement | null;
+  if (refreshBtn) {
+    refreshBtn.disabled = false;
+    refreshBtn.addEventListener('click', () => submit(true));
+  }
 
-    const input = $('#audit-appid') as HTMLInputElement | null;
-    const submit = (fresh: boolean) => {
-      const appid = parseAppIdInput(input?.value ?? '');
-      if (appid === null) {
-        setStatus('Enter a Steam App ID or a store page URL', 'error');
-        return;
-      }
-      void run(appid, fresh);
-    };
-    $('#audit-form')?.addEventListener('submit', (e) => {
-      e.preventDefault();
-      submit(false);
-    });
-    const refreshBtn = $('#audit-refresh-btn') as HTMLButtonElement | null;
-    if (refreshBtn) {
-      refreshBtn.disabled = false;
-      refreshBtn.addEventListener('click', () => submit(true));
-    }
+  const modelSelect = $('#audit-model-select') as HTMLSelectElement | null;
+  modelSelect?.addEventListener('change', () => {
+    if (running) return;
+    modelKey = modelSelect.value;
+    $('#audit-results')?.replaceChildren();
+    setStatus(`Model set to ${modelKey}`, 'info');
+  });
 
-    const modelSelect = $('#audit-model-select') as HTMLSelectElement | null;
-    modelSelect?.addEventListener('change', () => {
-      modelKey = modelSelect.value;
-      setStatus(`Model set to ${modelKey}`, 'info');
-      warmModel(modelKey);
-    });
-
-    // Deep link: /audit?appid=1245620 runs immediately; &live=1 audits the
-    // current store page instead of the dataset snapshot.
-    const params = new URLSearchParams(location.search);
-    const prefill = params.get('appid');
-    const appid = prefill ? parseAppIdInput(prefill) : null;
-    if (appid !== null) {
-      if (input) input.value = String(appid);
-      void run(appid, params.get('live') === '1' && liveLookupEnabled);
-    }
-  } catch (err) {
-    progress.hide();
-    setStatus(`Failed to load database: ${(err as Error).message}`, 'error');
-    console.error(err);
+  // Deep link: /audit?appid=1245620 runs immediately; &live=1 audits the
+  // current store page instead of the dataset snapshot.
+  const prefill = params.get('appid');
+  const appid = prefill ? parseAppIdInput(prefill) : null;
+  if (appid !== null) {
+    if (input) input.value = String(appid);
+    void run(appid, params.get('live') === '1' && liveLookupEnabled);
   }
 }
