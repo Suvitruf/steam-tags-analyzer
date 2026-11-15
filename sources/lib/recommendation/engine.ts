@@ -318,9 +318,9 @@ export async function recommend(
   // use, so "relevance" means the same thing on both pages.
   let currentTagSignals: CurrentTagSignal[] | undefined;
   if (currentTagIds.length > 0) {
-    // Retired tags have no centroid (tagEmbById covers active tags only), so
-    // their names come from the tags table and their similarity is 0.
-    const nameById = new Map(getTagsByIds(currentTagIds).map(t => [t.tag_id, t.name]));
+    // Taxonomy status comes from the tag row, never from model coverage: new
+    // active tags can precede a model rebuild. Unknown live IDs stay unknown.
+    const taxonomyById = new Map(getTagsByIds(currentTagIds).map(t => [t.tag_id, t]));
     // Similarity rank among all active tags: absolute cosines sit in a narrow
     // band for every tag, so "7th closest of 432" is the readable measure.
     const simRankById = new Map<number, number>();
@@ -330,7 +330,8 @@ export async function recommend(
       .forEach((t, idx) => simRankById.set(t.tagId, idx + 1));
     currentTagSignals = currentTagIds.map((tagId, i) => {
       const te = tagEmbById.get(tagId);
-      const name = te?.tagName ?? nameById.get(tagId) ?? `Tag ${tagId}`;
+      const taxonomy = taxonomyById.get(tagId);
+      const name = te?.tagName ?? taxonomy?.name ?? `Tag ${tagId}`;
       return {
         tagId,
         tag: name,
@@ -340,7 +341,8 @@ export async function recommend(
         neighborVote: neighborVote.get(tagId) ?? 0,
         neighborShare: neighborShare.get(tagId) ?? 0,
         intent: intentScore(name, descNorm, descTokens),
-        active: !!te,
+        taxonomyActive: taxonomy ? taxonomy.is_active === 1 : null,
+        embeddingAvailable: !!te,
       };
     });
   }

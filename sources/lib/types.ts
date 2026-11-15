@@ -96,12 +96,12 @@ export interface CurrentTagSignal {
   tag: string;
   /** Store-page rank (1 = most-voted). */
   rank: number;
-  /** Cosine to the tag's centroid; 0 for a retired tag (it has no centroid). */
+  /** Cosine to the tag's centroid; 0 is a placeholder when embeddingAvailable is false. */
   similarity: number;
   /**
    * Position of that cosine among ALL active tags for this description
    * (1 = closest). Absolute cosines cluster in 0.4–0.8 for every tag, so the
-   * rank is the usable relevance measure; 0 for a retired tag.
+   * rank is the usable relevance measure; 0 when embeddingAvailable is false.
    */
   similarityRank: number;
   /** Normalized kNN neighbor vote, [0,1]. Interpret only when output.neighborEvidenceAvailable. */
@@ -115,8 +115,10 @@ export interface CurrentTagSignal {
   neighborShare: number;
   /** Fraction of the tag's words the description uses (1 = verbatim). */
   intent: number;
-  /** False when Valve has retired the tag. */
-  active: boolean;
+  /** The dataset's taxonomy status; null when this tag is not in the taxonomy yet. */
+  taxonomyActive: boolean | null;
+  /** This model has a usable centroid for the tag, independently of taxonomy status. */
+  embeddingAvailable: boolean;
 }
 
 export interface TagRecommendation {

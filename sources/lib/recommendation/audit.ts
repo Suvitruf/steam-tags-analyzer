@@ -21,9 +21,9 @@ import { recommend, type RecommendationProgressCallback } from './engine';
 import { loadAppById, getTagStats, getAppTags, getAppTagsCollectedAt, getTagsByIds } from '../db/queries';
 import { DEFAULT_MODEL_KEY } from '../llm/models';
 
-export type AuditBucket = 'identity' | 'feature' | 'neutral' | 'weak' | 'suspicious' | 'retired';
+export type AuditBucket = 'identity' | 'feature' | 'neutral' | 'weak' | 'unassessed' | 'suspicious' | 'retired';
 export const AUDIT_BUCKETS: readonly AuditBucket[] =
-  ['identity', 'feature', 'neutral', 'weak', 'suspicious', 'retired'];
+  ['identity', 'feature', 'neutral', 'weak', 'unassessed', 'suspicious', 'retired'];
 
 // Thresholds. Relevance is the tag's similarity RANK among all active tags
 // for this description, not the absolute cosine: cosines sit in 0.4–0.8 for
@@ -211,9 +211,10 @@ const pct = (x: number) => `${Math.round(x * 100)}%`;
 
 /**
  * Classify one current tag. Order matters and encodes the argument above:
- * retired → identity (stated, or close to the description, or close-ish with
+ * retired/unknown taxonomy → identity (stated, or close to the description, or close-ish with
  * neighbor agreement) → verified store feature → neutral (praise/meta or
- * near-universal) → identity by neighbor consensus → suspicious → weak.
+ * near-universal) → identity by neighbor consensus → missing model coverage
+ * (unassessed) → suspicious → weak.
  * The consensus route sits after the broad-tag check so Singleplayer/Indie
  * can't become "identity" just because every neighbor carries them.
  */
@@ -224,16 +225,19 @@ export function classifyTag(
   const { verifiedBy, featureMissing } = featureFacts(s.tag, ctx.categories);
   const base = { verifiedBy, featureMissing };
 
-  if (!s.active) {
+  if (s.taxonomyActive === false) {
     return { ...base, bucket: 'retired', reason: 'Valve retired this tag; it spends a slot players can no longer browse by.' };
+  }
+  if (s.taxonomyActive === null) {
+    return { ...base, bucket: 'unassessed', reason: "This tag is not in the dataset's taxonomy yet; its status and relevance are unconfirmed." };
   }
   if (s.intent >= AUDIT.INTENT_STATED) {
     return { ...base, bucket: 'identity', reason: 'Your description uses these words.' };
   }
-  if (s.similarityRank > 0 && s.similarityRank <= AUDIT.IDENTITY_TOP_RANK) {
+  if (s.embeddingAvailable && s.similarityRank > 0 && s.similarityRank <= AUDIT.IDENTITY_TOP_RANK) {
     return { ...base, bucket: 'identity', reason: `Among the ${AUDIT.IDENTITY_TOP_RANK} tags closest to the description (#${s.similarityRank}).` };
   }
-  if (ctx.neighborEvidenceAvailable && s.similarityRank > 0 && s.similarityRank <= AUDIT.SUPPORTED_TOP_RANK && s.neighborVote >= AUDIT.SUPPORTED_VOTE) {
+  if (s.embeddingAvailable && ctx.neighborEvidenceAvailable && s.similarityRank > 0 && s.similarityRank <= AUDIT.SUPPORTED_TOP_RANK && s.neighborVote >= AUDIT.SUPPORTED_VOTE) {
     return {
       ...base, bucket: 'identity',
       reason: `Close to the description (#${s.similarityRank} of the tags) and games like this use it (${pct(s.neighborVote)} of the neighbor vote).`,
@@ -249,14 +253,17 @@ export function classifyTag(
   if (prevalence >= AUDIT.BROAD_PREVALENCE) {
     return { ...base, bucket: 'neutral', reason: `On ${pct(prevalence)} of all tagged games; too broad to say much either way.` };
   }
+  if (ctx.neighborEvidenceAvailable && s.neighborShare >= AUDIT.IDENTITY_MIN_SHARE) {
+    return { ...base, bucket: 'identity', reason: `${pct(s.neighborShare)} of the nearest games carry it.` };
+  }
+  if (!s.embeddingAvailable) {
+    return { ...base, bucket: 'unassessed', reason: 'This tag is active in the taxonomy, but the selected model does not cover it yet. Available evidence is insufficient to assess its relevance.' };
+  }
   if (!ctx.neighborEvidenceAvailable) {
     return {
       ...base, bucket: 'weak',
       reason: `Limited evidence: #${s.similarityRank} closest tag to the description. Similar-game tag data is unavailable or incomplete, so this tag cannot be judged suspicious.`,
     };
-  }
-  if (s.neighborShare >= AUDIT.IDENTITY_MIN_SHARE) {
-    return { ...base, bucket: 'identity', reason: `${pct(s.neighborShare)} of the nearest games carry it.` };
   }
   const missingNote = featureMissing ? " The store's feature list doesn't include it either." : '';
   if (s.similarity < ctx.retrievalCutoff && s.neighborShare <= AUDIT.SUSPECT_MAX_SHARE) {

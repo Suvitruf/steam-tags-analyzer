@@ -16,11 +16,16 @@ const bundled = await build({
       export * from './sources/lib/inference/store';
       export * from './sources/lib/db/queries';
       export { centroidsFingerprint, tagStatsFingerprint, readModelSet } from './sources/lib/matched-set';
+      export { auditGame, classifyTag } from './sources/lib/recommendation/audit';
+      export { renderTagRow } from './sources/lib/audit/ui';
+      export { loadRanker } from './sources/lib/scoring/ranker';
+      export { GAME_VECTOR_MODELS } from './sources/lib/config';
     `,
     resolveDir: fileURLToPath(new URL('../../', import.meta.url)), loader: 'ts',
   },
   bundle: true, format: 'esm', platform: 'node', write: false,
   define: {
+    'import.meta.env.DEV': 'false',
     'import.meta.env.VITE_ANALYTICS_BASE': 'undefined',
     'import.meta.env.VITE_STEAM_PROXY_URL': 'undefined',
     'import.meta.env.VITE_INFERENCE_MANIFEST_URL': 'undefined',
@@ -36,6 +41,7 @@ const bundled = await build({
       b.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: `
         export function query() { throw new Error('The pack path must not query SQL'); }
         export const queryOne = query;
+        export const loadDatabase = query;
       ` }));
     },
   }],
@@ -58,6 +64,7 @@ function fixture() {
     { tag_id: 1, name: 'Roguelike', normalized_name: 'roguelike', is_active: 1 },
     { tag_id: 2, name: 'Deckbuilder', normalized_name: 'deckbuilder', is_active: 1 },
     { tag_id: 3, name: 'Old tag', normalized_name: 'old tag', is_active: 0 },
+    { tag_id: 4, name: 'Unmodeled tag', normalized_name: 'unmodeled tag', is_active: 1 },
   ];
   const core = file('snapshots', api.encodePack({
     kind: 'core', tags, names: ['Alpha', 'Beta', 'Quiet'], dates: ['2026-11-01', '2026-11-02'],
@@ -70,14 +77,17 @@ function fixture() {
     reviews: bytes(new Float64Array([1000, 100, NaN])), observed: bytes(new Uint32Array([1, 2, 0])),
     topSegments: bytes(new Uint32Array([100, 100])), topApps: bytes(new Uint32Array([0, 1])),
   }));
-  const stats = tags.map((t, i) => ({ tag_id: t.tag_id, game_count: i + 1, avg_rank: 2.5, idf: i === 2 ? null : 1.1, top1_rate: 0.3 }));
+  // Taxonomy can add an active tag before the next model rebuild. Conversely,
+  // the model file still contains a centroid for a now-inactive tag.
+  const modelTags = tags.slice(0, 3);
+  const stats = modelTags.map((t, i) => ({ tag_id: t.tag_id, game_count: i + 1, avg_rank: 2.5, idf: i === 2 ? null : 1.1, top1_rate: 0.3 }));
   const statsBytes = Buffer.alloc(3 * 36);
   for (const [i, r] of stats.entries()) {
     statsBytes.writeUInt32LE(r.tag_id, i * 36); statsBytes.writeBigInt64LE(BigInt(r.game_count), i * 36 + 4);
     [r.avg_rank, r.idf, r.top1_rate].forEach((v, j) => statsBytes.writeDoubleLE(v ?? NaN, i * 36 + 12 + j * 8));
   }
   const embeddings = bytes(new Float32Array([1, 0, 0, 1, 0.5, 0.5]));
-  const centroidBytes = Buffer.concat(tags.map((t, i) => {
+  const centroidBytes = Buffer.concat(modelTags.map((t, i) => {
     const id = Buffer.alloc(4); id.writeUInt32LE(t.tag_id);
     return Buffer.concat([id, embeddings.subarray(i * 8, i * 8 + 8)]);
   }));
@@ -89,7 +99,7 @@ function fixture() {
   };
   const model = file(`sets/${row.set_id}`, api.encodePack({
     kind: 'model', model: MODEL, setId: row.set_id, stats,
-    centroids: tags.map((t, i) => ({ tagId: t.tag_id, offset: i * 8, length: 8 })),
+    centroids: modelTags.map((t, i) => ({ tagId: t.tag_id, offset: i * 8, length: 8 })),
   }, { embeddings }));
   const apps = [10, 20, 30].map((appid, i) => ({
     appid, name: ['Alpha', 'Beta', 'Quiet'][i], type: 'game', is_released: 1,
@@ -131,7 +141,7 @@ test('pack queries preserve ranks, nulls, taxonomy, exemplars and matched-set fi
   const store = await api.loadInference(BASE + 'manifest.json');
   assert.equal(store.details.size, 0);
   assert.equal(api.getAppById(10).short_description, null);
-  assert.deepEqual(api.getAllTags().map(t => t.tag_id), [2, 1]);
+  assert.deepEqual(api.getAllTags().map(t => t.tag_id), [2, 1, 4]);
   assert.deepEqual(api.getAppTags(10).map(t => [t.tag_id, t.rank]), [[1, 1], [3, 2], [2, 3]]);
   assert.deepEqual(api.getAppTags(20).map(t => [t.tag_id, t.rank]), [[1, null], [2, 1]]);
   assert.equal(api.getAppById(999), null);
@@ -158,6 +168,77 @@ test('pack queries preserve ranks, nulls, taxonomy, exemplars and matched-set fi
   assert.deepEqual(await api.loadAppById(10), apps[0]);
   assert.equal(requests.filter(url => url.includes('/details/')).length, 1);
 }));
+
+test('real engine audits covered, retired, unmodeled and unknown tags independently on the pack path', () => environment(async ({ files }) => {
+  await api.loadInference(BASE + 'manifest.json');
+  await api.loadInferenceModel(MODEL);
+  files.set(BASE + 'ranker.json', Buffer.from(JSON.stringify({ trees: [{ v: 0 }], feature_names: [] })));
+  await api.loadRanker(BASE + 'ranker.json');
+  const hadVectors = api.GAME_VECTOR_MODELS.delete(MODEL);
+  try {
+    const audit = await api.auditGame({
+      appid: 10, queryEmbedding: new Float32Array([1, 0]),
+      live: { name: 'Coverage fixture', short_description: 'Explore a mysterious world.', tagIds: [1, 3, 4, 999] },
+    }, undefined, MODEL);
+    assert.deepEqual(audit.tags.map(t => [t.tagId, t.taxonomyActive, t.embeddingAvailable, t.bucket]), [
+      [1, true, true, 'identity'], [3, false, false, 'retired'],
+      [4, true, false, 'unassessed'], [999, null, false, 'unassessed'],
+    ]);
+    assert.equal(audit.counts.unassessed, 2);
+    assert.equal(audit.counts.retired, 1);
+    assert.deepEqual(audit.orderNotes, []);
+    assert.match(audit.tags[2].reason, /active.*model does not cover/);
+    assert.match(audit.tags[3].reason, /not in the dataset's taxonomy/);
+  } finally {
+    if (hadVectors) api.GAME_VECTOR_MODELS.add(MODEL);
+  }
+}));
+
+test('missing coverage preserves independent evidence and renders no false similarity or retirement claim', () => {
+  const tag = {
+    tagId: 4, tag: 'Unmodeled tag', rank: 1, similarity: 0, similarityRank: 0,
+    neighborVote: 0, neighborShare: 0, intent: 0, taxonomyActive: true, embeddingAvailable: false,
+  };
+  const ctx = { retrievalCutoff: 0.6, prevalence: new Map(), neighborEvidenceAvailable: true };
+  const unavailable = { ...ctx, neighborEvidenceAvailable: false };
+  for (const context of [ctx, unavailable]) {
+    assert.equal(api.classifyTag(tag, context).bucket, 'unassessed');
+    assert.equal(api.classifyTag({ ...tag, taxonomyActive: null }, context).bucket, 'unassessed');
+    assert.equal(api.classifyTag({ ...tag, taxonomyActive: false }, context).bucket, 'retired');
+    assert.equal(api.classifyTag({ ...tag, intent: 1 }, context).bucket, 'identity');
+    assert.equal(api.classifyTag({ ...tag, tag: 'Multiplayer' }, { ...context, categories: new Set(['multi-player']) }).bucket, 'feature');
+    assert.equal(api.classifyTag({ ...tag, tag: 'Classic' }, context).bucket, 'neutral');
+    assert.equal(api.classifyTag(tag, { ...context, prevalence: new Map([[4, 0.5]]) }).bucket, 'neutral');
+    assert.equal(api.classifyTag({ ...tag, similarityRank: 1 }, context).bucket, 'unassessed');
+  }
+  assert.equal(api.classifyTag({ ...tag, neighborShare: 0.8 }, ctx).bucket, 'identity');
+  assert.equal(api.classifyTag({ ...tag, neighborShare: 0.8 }, unavailable).bucket, 'unassessed');
+  const covered = { ...tag, embeddingAvailable: true, similarity: 0.4, similarityRank: 200 };
+  assert.equal(api.classifyTag(covered, ctx).bucket, 'suspicious');
+  assert.equal(api.classifyTag(covered, unavailable).bucket, 'weak');
+
+  const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  const originalLocation = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: { querySelector: () => null } });
+  Object.defineProperty(globalThis, 'location', { configurable: true, value: { search: '' } });
+  try {
+    const hostile = { ...tag, tag: '<img src=x onerror="alert(1)">' };
+    const html = api.renderTagRow({ ...hostile, ...api.classifyTag(hostile, ctx) }, true);
+    assert.match(html, /Not assessed/);
+    assert.match(html, /similarity unavailable/);
+    assert.match(html, /class="tag-name-link"/);
+    assert.doesNotMatch(html, /similarity 0\.00|<img|onerror="/);
+    const unknown = { ...hostile, taxonomyActive: null };
+    assert.doesNotMatch(api.renderTagRow({ ...unknown, ...api.classifyTag(unknown, ctx) }, true), /tag-name-link/);
+    const retired = { ...tag, taxonomyActive: false };
+    assert.doesNotMatch(api.renderTagRow({ ...retired, ...api.classifyTag(retired, ctx) }, true), /tag-name-link/);
+  } finally {
+    for (const [key, descriptor] of [['document', originalDocument], ['location', originalLocation]]) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else Reflect.deleteProperty(globalThis, key);
+    }
+  }
+});
 
 test('cache survives reload and offline use, repairs bad entries and retries missing files', () => environment(async ({ manifest, apps, entries, requests, network }) => {
   await api.loadInference(BASE + 'manifest.json'); await api.loadInferenceModel(MODEL); await api.loadAppById(10);

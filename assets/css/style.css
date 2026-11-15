@@ -660,6 +660,7 @@ nav.analytics-controls { display: flex; flex-wrap: wrap; gap: 8px 16px; }
 .badge-feature { background: var(--color-accent); color: #08222f; }
 .badge-neutral { background: var(--color-surface-light); color: var(--color-text-bright); }
 .badge-weak { background: var(--color-warning); color: #2b1a00; }
+.badge-unassessed { background: var(--color-surface); color: var(--color-text-bright); border: 1px solid currentColor; }
 .badge-suspicious { background: var(--color-avoid-tag); color: #fff; }
 .badge-retired { background: #6b1b1b; color: #fff; }
 .audit-note, .audit-thin {

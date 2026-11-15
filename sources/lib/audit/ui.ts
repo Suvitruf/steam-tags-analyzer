@@ -17,6 +17,7 @@ const BUCKET_LABEL: Record<AuditBucket, string> = {
   feature: 'Store feature',
   neutral: 'Neutral',
   weak: 'Weakly supported',
+  unassessed: 'Not assessed',
   suspicious: 'Suspicious',
   retired: 'Retired',
 };
@@ -26,12 +27,13 @@ const BUCKET_HELP: Record<AuditBucket, string> = {
   feature: "verified by Steam's own feature list (co-op, PvP, controller support…), which players can't vote on",
   neutral: 'praise, packaging or a near-universal tag; says little about what the game is',
   weak: 'neither the description nor similar games back it up; not necessarily wrong',
+  unassessed: 'taxonomy or model coverage is missing; there is not enough evidence to judge this tag',
   suspicious: 'far from the description and almost never on similar games: a community joke or a stray vote',
   retired: 'Valve removed this tag from the taxonomy',
 };
 
 // Legend/summary order: good news first, problems last.
-const BUCKET_ORDER: AuditBucket[] = ['identity', 'feature', 'neutral', 'weak', 'suspicious', 'retired'];
+const BUCKET_ORDER: AuditBucket[] = ['identity', 'feature', 'neutral', 'weak', 'unassessed', 'suspicious', 'retired'];
 
 let modelKey = DEFAULT_MODEL_KEY;
 let running = false;
@@ -196,11 +198,11 @@ function renderBadge(bucket: AuditBucket): string {
   return `<span class="badge badge-${bucket}" title="${escapeHtml(BUCKET_HELP[bucket])}">${BUCKET_LABEL[bucket]}</span>`;
 }
 
-function renderTagRow(t: AuditedTag, neighborEvidenceAvailable: boolean): string {
-  const tooltip = `similarity ${t.similarity.toFixed(2)} · ` +
+export function renderTagRow(t: AuditedTag, neighborEvidenceAvailable: boolean): string {
+  const tooltip = (t.embeddingAvailable ? `similarity ${t.similarity.toFixed(2)}` : 'description similarity unavailable for this tag') + ' · ' +
     (neighborEvidenceAvailable ? `neighbor vote ${(t.neighborVote * 100).toFixed(0)}%` : 'similar-game tag data unavailable or incomplete') +
     (t.verifiedBy.length ? ` · store features: ${t.verifiedBy.join(', ')}` : '');
-  const name = t.active
+  const name = t.taxonomyActive === true
     ? `<a class="tag-name-link" href="${tagPageUrl(t.tagId, t.tag)}" title="Open tag stats: distribution, trends, combos">${escapeHtml(t.tag)}</a>`
     : escapeHtml(t.tag);
   return `

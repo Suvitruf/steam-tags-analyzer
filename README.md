@@ -32,6 +32,8 @@ Steam Tag Analyzer helps indie developers describe their game, find relevant com
 
 Reviews are public observations, **not sales, revenue, or profitability**. Reaching a review threshold is an outcome to compare, not a universal definition of success. Unknown observations remain distinct from observed zeros.
 
+The tag audit distinguishes a tag's taxonomy status from the selected model's coverage. An active tag without a model vector can still be supported by the description, store features or similar games. When evidence is insufficient, it appears as **Not assessed**; unknown tag IDs also remain unassessed. **Retired** follows an explicitly inactive taxonomy record.
+
 Paid/free groups use the latest observed final price: positive or zero. All games also includes unknown prices. Discounts can affect membership; zero observed price is not verified free-to-play status. Historical charts use the current price group. Data Coverage and Tag Changelog describe the entire collection and taxonomy.
 
 Current tags, prices, features, and publisher credits can differ from their launch-time values. Comparisons show associations and expose sample sizes and coverage limits. Equal-age comparisons require validated histories and release anchors; missing months are not filled with zeros. The Data Coverage page explains the snapshot, exclusions, and metric definitions.
@@ -62,7 +64,8 @@ snapshots and selected cohorts. Data and models are needed at runtime.
 
 `npm run test:analyzer` checks the pack reader, lazy details, matched-set
 fingerprints, caching/offline behavior and integrity failures using small
-synthetic fixtures. It needs no private database or model artifacts.
+synthetic fixtures. It also checks audit taxonomy/model coverage, independent
+evidence and rendered explanations. It needs no private database or model artifacts.
 `VITE_INFERENCE_MANIFEST_URL` can point a local build at another compatible
 manifest; otherwise the client uses the configured CDN.
 
