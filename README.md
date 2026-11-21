@@ -9,6 +9,20 @@
 
 Steam Tag Analyzer helps indie developers describe their game, find relevant comparison titles, and research a niche using observed Steam data. It recommends tags that fit the game and have useful commercial associations within similar games, rather than simply promoting the most popular tags.
 
+## Use it directly on Steam
+
+[Install the userscript](https://raw.githubusercontent.com/Suvitruf/steam-tags-analyzer/master/userscript/dist/steam-tag-audit.user.js)
+with Tampermonkey or Violentmonkey. It adds on-demand tag audits, game context,
+competitor comparisons, tag-niche statistics, publisher portfolios, upcoming
+peers and local tag-change history to Steam pages. Research panels need no model;
+local audits warn before downloading an uncached model.
+
+The script declares public installation and update URLs. Its source and build
+live in [`userscript/`](userscript/README.md), independently of the website.
+Selections, tag history and cached results are stored locally. The script fetches
+data from the documented CDN and Steam proxy; it does not read your Steam account
+or edit tags.
+
 ## What you can do
 
 - **Analyze a game pitch.** Get primary and secondary tags, misleading tags to avoid, and similar successful games that explain the recommendations.

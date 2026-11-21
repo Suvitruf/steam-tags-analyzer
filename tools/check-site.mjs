@@ -41,7 +41,7 @@ function walk(directory) {
       errors.push(`Unexpected symbolic link: ${relative}`);
       continue;
     }
-    const privateDirectory = /^(sources|scripts|worker|models|data|node_modules|tools|vendor|docs|eval|\.github|\.agents|\.claude|\.codex)\//;
+    const privateDirectory = /^(sources|scripts|worker|models|data|node_modules|tools|userscript|vendor|docs|eval|\.github|\.agents|\.claude|\.codex)\//;
     const privateFile = /^(README\.md|CLAUDE\.md|AGENTS\.md|Gemfile.*|package.*\.json|\.env.*)$/;
     if (privateDirectory.test(relative) || privateFile.test(relative) || /\.(db|onnx)(\.|$)/.test(relative)) {
       errors.push(`Non-site file in output: ${relative}`);

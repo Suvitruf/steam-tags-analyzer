@@ -1,0 +1,25 @@
+{
+  "name": "steam-tag-audit-userscript",
+  "version": "0.3.6",
+  "private": true,
+  "type": "module",
+  "description": "Steam tag audits and market research panels for Tampermonkey and Violentmonkey.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "sync:research": "node tools/sync-research.mjs",
+    "check:research": "node tools/sync-research.mjs --check",
+    "test:setup": "python3 tools/prepare-managers.py",
+    "build": "node tools/build.mjs",
+    "check:build": "node tools/build.mjs --check",
+    "test": "node --test test/*.test.mjs",
+    "test:browser": "npm run build && playwright test",
+    "sync:shared": "node tools/sync-shared.mjs",
+    "check:shared": "node tools/sync-shared.mjs --check"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "esbuild": "0.25.12"
+  }
+}

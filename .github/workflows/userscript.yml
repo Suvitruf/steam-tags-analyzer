@@ -1,0 +1,38 @@
+name: Check userscript
+
+on:
+  push:
+    paths:
+      - 'userscript/**'
+      - '.github/workflows/userscript.yml'
+  pull_request:
+    paths:
+      - 'userscript/**'
+      - '.github/workflows/userscript.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: userscript
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: userscript/package-lock.json
+      - name: Install userscript build dependencies
+        run: npm ci
+      - name: Test the userscript
+        run: npm test
+      - name: Verify committed distribution files
+        run: npm run check:build

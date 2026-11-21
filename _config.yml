@@ -13,6 +13,7 @@ exclude:
   - tmp/
   - sources/
   - tools/
+  - userscript/
   - node_modules/
   - vendor/
   - tsconfig*.json

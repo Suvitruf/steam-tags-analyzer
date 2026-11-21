@@ -1,0 +1,10 @@
+node_modules/
+!dist/
+dist/*
+!dist/steam-tag-audit.user.js
+!dist/steam-tag-audit.meta.js
+!dist/steam-tag-audit.user.js.LEGAL.txt
+test-results/
+playwright-report/
+*.log
+.test-managers/
