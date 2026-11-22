@@ -29,7 +29,7 @@ import { findSimilarTags, embed, cosineSimilarity } from '../llm/engine';
 import { loadGameVectors, projectQuery, nearestGames, type GameVectors } from '../llm/game-knn';
 import { DEFAULT_MODEL_KEY } from '../llm/models';
 import { GAME_VECTOR_MODELS, gameVectorsUrl } from '../config';
-import { currentSetId } from '../matched-set';
+import { currentSetId, readModelSet } from '../matched-set';
 import { predict, type FeatureVector, featureVectorToArray } from '../scoring/ranker';
 
 // `bytes` accompanies stages that download something (today only the game-vector
@@ -110,20 +110,23 @@ function getCachedTagEmbeddings(modelKey: string): TagEmbedding[] {
   return cached;
 }
 
-// The game-vector blob is ~8MB; fetch+parse once per model and reuse. Cache the
-// promise so concurrent analyses share one download; drop it on failure so a
-// transient error can be retried next time.
+// Reuse parsed vectors within a tab and verified bytes across visits. Key the
+// promise by URL and fingerprint so a refreshed set cannot reuse the old blob.
 const gameVectorsCache = new Map<string, Promise<GameVectors>>();
 
 export function getCachedGameVectors(modelKey: string, onProgress?: RecommendationProgressCallback): Promise<GameVectors> {
-  let p = gameVectorsCache.get(modelKey);
+  const row = readModelSet(modelKey);
+  const url = gameVectorsUrl(modelKey, currentSetId(modelKey));
+  const key = `${url}|${row?.vectors_sha256 ?? ''}`;
+  let p = gameVectorsCache.get(key);
   if (!p) {
     // Only the call that starts the download sees its progress; later callers
     // share the promise and get the parsed blob.
-    p = loadGameVectors(gameVectorsUrl(modelKey, currentSetId(modelKey)), onProgress && ((loaded, total) =>
-      onProgress('Finding similar games', 'downloading game index', { loaded, total })));
-    p.catch(() => gameVectorsCache.delete(modelKey));
-    gameVectorsCache.set(modelKey, p);
+    p = loadGameVectors(url, onProgress && ((loaded, total) =>
+      onProgress('Finding similar games', 'downloading game index', { loaded, total })),
+      row ? { setId: row.set_id, sha256: row.vectors_sha256 } : undefined);
+    p.catch(() => gameVectorsCache.delete(key));
+    gameVectorsCache.set(key, p);
   }
   return p;
 }

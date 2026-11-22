@@ -31,6 +31,15 @@ export class FetchError extends Error {
 
 export const canInflate = (): boolean => typeof DecompressionStream !== 'undefined';
 
+/** Firefox Cache API may return a page-owned ArrayBuffer to a userscript.
+ * Copy into a local backing buffer before parsers create typed-array views. */
+export async function readCachedBytes(response: Response): Promise<Uint8Array<ArrayBuffer>> {
+  const buffer = await response.arrayBuffer();
+  const bytes = new Uint8Array(buffer.byteLength);
+  bytes.set(new Uint8Array(buffer));
+  return bytes;
+}
+
 type Reader = ReadableStreamDefaultReader<Uint8Array>;
 
 /** Reads until at least `n` bytes are in hand (or the stream ends). */
