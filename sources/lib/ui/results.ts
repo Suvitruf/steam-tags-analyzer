@@ -8,8 +8,9 @@ import { escapeHtml, tagPageUrl, storeUrl, renderSimilarGames } from './helpers'
 
 export function renderResultsHtml(output: RecommendationOutput): string {
   const exemplarOpts = { basis: output.exemplarBasis, segment: output.segment?.main_tag_name };
+  const inferredFrom = output.tagConstraints ? 'the description and your tag choices' : 'the description';
   const segmentInfo = output.segment
-    ? `<p class="segment-info">Segment: <strong>${escapeHtml(output.segment.main_tag_name)}</strong> (${output.segment.game_count} games${output.segmentInferred ? ', inferred from the description' : ''})</p>`
+    ? `<p class="segment-info">Segment: <strong>${escapeHtml(output.segment.main_tag_name)}</strong> (${output.segment.game_count} games${output.segmentInferred ? `, inferred from ${inferredFrom}` : ''})</p>`
     : '<p class="segment-info">No segment matched &mdash; showing general recommendations</p>';
   const caveats = evidenceCaveats(output);
   const evidenceInfo = caveats.length
@@ -33,6 +34,7 @@ export function renderResultsHtml(output: RecommendationOutput): string {
     ${segmentInfo}
     ${evidenceInfo}
     ${renderCompetitors(output.competitors ?? [])}
+    ${renderTagChoices(output.tagConstraints)}
     <div class="results-grid">
       <div class="result-section result-primary">
         <h3>Recommended Primary Tags</h3>
@@ -49,6 +51,17 @@ export function renderResultsHtml(output: RecommendationOutput): string {
     </div>
     ${renderSimilarGames(output.similarGames)}
   `;
+}
+
+function renderTagChoices(choices: RecommendationOutput['tagConstraints']): string {
+  if (!choices) return '';
+  const names = (tags: Array<{ tag: string }>) => tags.map(t => escapeHtml(t.tag)).join(', ');
+  const unsupported = choices.included.filter(t => !t.embeddingAvailable);
+  return `<div class="tag-choice-summary similar-games-note">
+    ${choices.included.length ? `<p><strong>Marked present by you:</strong> ${names(choices.included)}.</p>` : ''}
+    ${unsupported.length ? `<p><strong>Not ranked:</strong> ${names(unsupported)}. These tags are not covered by the selected model; your choices are retained.</p>` : ''}
+    ${choices.excluded.length ? `<p><strong>Excluded by you:</strong> ${names(choices.excluded)}. These exact tags are omitted from recommendations.</p>` : ''}
+  </div>`;
 }
 
 function renderCompetitors(competitors: CompetitorEvidence[]): string {
@@ -74,7 +87,7 @@ function renderCompetitors(competitors: CompetitorEvidence[]): string {
 export function evidenceCaveats(output: RecommendationOutput): string[] {
   const out: string[] = [];
   if (output.segment && output.segmentInferred) {
-    out.push('The segment was inferred from the description; pick the main genre explicitly if it looks wrong.');
+    out.push(`The segment was inferred from ${output.tagConstraints ? 'the description and your tag choices' : 'the description'}; pick the main genre explicitly if it looks wrong.`);
   }
   if (output.segment && output.segment.game_count < 100) {
     out.push(`Small segment (${output.segment.game_count} games): lifts are shrunk toward 1 and carry little weight.`);
@@ -83,7 +96,9 @@ export function evidenceCaveats(output: RecommendationOutput): string[] {
     out.push('Similar-game tag data is unavailable, so no nearest-game tag votes were used.');
   }
   if (output.primaryTags.length === 0) {
-    out.push('No tag cleared the primary relevance bar; a longer, gameplay-focused description usually helps.');
+    out.push(output.tagConstraints?.excluded.length && !output.rankedTagIds.length
+      ? 'No eligible tags remain after your exclusions; remove some exclusions to get recommendations.'
+      : 'No tag cleared the primary relevance bar; a longer, gameplay-focused description usually helps.');
   }
   return out;
 }
@@ -116,13 +131,14 @@ export function renderTagListHtml(
       const haveBadge = currentTags.has(t.tagId)
         ? ' <span class="badge badge-have" title="This game already uses this tag">✓ already using</span>'
         : '';
+      const specifiedBadge = t.userSpecified ? ' <span class="badge badge-specified">specified by you</span>' : '';
       const exemplarLinks = t.exemplarGames.map(g =>
         `<a class="exemplar-link" href="${escapeHtml(storeUrl(g.appid))}" target="_blank" rel="noopener noreferrer">${escapeHtml(g.name)}</a>`
       ).join(', ');
       return `
       <li class="tag-item">
         <div class="tag-header">
-          <span class="tag-name"><a class="tag-name-link" href="${escapeHtml(tagPageUrl(t.tagId, t.tag))}" title="Open tag stats: distribution, trends, combos">${escapeHtml(t.tag)}</a>${haveBadge}</span>
+          <span class="tag-name"><a class="tag-name-link" href="${escapeHtml(tagPageUrl(t.tagId, t.tag))}" title="Open tag stats: distribution, trends, combos">${escapeHtml(t.tag)}</a>${haveBadge}${specifiedBadge}</span>
           <span class="tag-score" title="Strength: ${strength}/100 · raw ${t.score.toFixed(3)} · similarity ${t.relevance.toFixed(2)} · lift ${t.successLift.toFixed(1)}x">
             ${type === 'avoid' ? '⚠' : strength}
           </span>

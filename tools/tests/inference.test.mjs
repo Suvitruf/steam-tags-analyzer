@@ -20,7 +20,8 @@ const bundled = await build({
       export { renderTagRow } from './sources/lib/audit/ui';
       export * from './sources/lib/audit/precomputed';
       export { loadRanker } from './sources/lib/scoring/ranker';
-      export { GAME_VECTOR_MODELS } from './sources/lib/config';
+      export { GAME_VECTOR_MODELS, gameVectorsUrl } from './sources/lib/config';
+      export { recommend } from './sources/lib/recommendation/engine';
     `,
     resolveDir: fileURLToPath(new URL('../../', import.meta.url)), loader: 'ts',
   },
@@ -47,13 +48,14 @@ const bundled = await build({
     },
   }],
 });
-const api = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`);
+const moduleUrl = `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`;
+const api = await import(moduleUrl);
 const BASE = 'https://inference.example.test/';
 const MODEL = 'gte-base';
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const bytes = array => new Uint8Array(array.buffer, array.byteOffset, array.byteLength);
 
-function fixture() {
+function fixture(client, { constraints = false } = {}) {
   const files = new Map();
   const file = (folder, body) => {
     const sha256 = hash(body), compressed = gzipSync(body);
@@ -67,38 +69,63 @@ function fixture() {
     { tag_id: 3, name: 'Old tag', normalized_name: 'old tag', is_active: 0 },
     { tag_id: 4, name: 'Unmodeled tag', normalized_name: 'unmodeled tag', is_active: 1 },
   ];
-  const core = file('snapshots', api.encodePack({
+  // More than 120 centroids exercise forced inclusion outside the shortlist.
+  // The single kNN neighbor carries Horror, whose centroid is deliberately far away.
+  if (constraints) {
+    for (const [tag_id, name] of [[5, 'Horror'], [6, 'Multiplayer'], [7, 'Co-op'], [8, 'Online Co-Op']]) {
+      tags.push({ tag_id, name, normalized_name: name.toLowerCase(), is_active: 1 });
+    }
+    for (let tag_id = 100; tag_id < 240; tag_id++) {
+      tags.push({ tag_id, name: `Fixture ${tag_id}`, normalized_name: `fixture ${tag_id}`, is_active: 1 });
+    }
+  }
+  const core = file('snapshots', client.encodePack({
     kind: 'core', tags, names: ['Alpha', 'Beta', 'Quiet'], dates: ['2026-11-01', '2026-11-02'],
     segments: [{ segment_id: 100, main_tag_id: 1, main_tag_name: 'Roguelike', release_year: null, price_bucket: null, game_count: 2 }],
-    scores: [[100, 2, 2.5, 0.8, 2, 1, 0.5, 1]], removed: { 3: '2026-01-01' },
-    gameCount: 3, tagCount: 5, topCount: 2,
+    scores: [[100, 2, 2.5, 0.8, 2, 1, 0.5, 1], ...(constraints ? [[100, 239, 4, 1, 100, 20, 0.1, 0.4]] : [])], removed: { 3: '2026-01-01' },
+    gameCount: 3, tagCount: constraints ? 6 : 5, topCount: 2,
   }, {
-    appids: bytes(new Uint32Array([10, 20, 30])), offsets: bytes(new Uint32Array([0, 3, 5, 5])),
-    tags: bytes(new Uint16Array([0, 1, 2, 0, 1])), ranks: new Uint8Array([1, 3, 2, 255, 1]),
+    appids: bytes(new Uint32Array([10, 20, 30])), offsets: bytes(new Uint32Array(constraints ? [0, 3, 6, 6] : [0, 3, 5, 5])),
+    tags: bytes(new Uint16Array(constraints ? [0, 1, 2, 0, 1, 4] : [0, 1, 2, 0, 1])),
+    ranks: new Uint8Array(constraints ? [1, 3, 2, 255, 1, 2] : [1, 3, 2, 255, 1]),
     reviews: bytes(new Float64Array([1000, 100, NaN])), observed: bytes(new Uint32Array([1, 2, 0])),
     topSegments: bytes(new Uint32Array([100, 100])), topApps: bytes(new Uint32Array([0, 1])),
   }));
   // Taxonomy can add an active tag before the next model rebuild. Conversely,
   // the model file still contains a centroid for a now-inactive tag.
-  const modelTags = tags.slice(0, 3);
+  const modelTags = constraints ? tags.filter(t => t.tag_id !== 4) : tags.slice(0, 3);
   const stats = modelTags.map((t, i) => ({ tag_id: t.tag_id, game_count: i + 1, avg_rank: 2.5, idf: i === 2 ? null : 1.1, top1_rate: 0.3 }));
-  const statsBytes = Buffer.alloc(3 * 36);
+  const statsBytes = Buffer.alloc(stats.length * 36);
   for (const [i, r] of stats.entries()) {
     statsBytes.writeUInt32LE(r.tag_id, i * 36); statsBytes.writeBigInt64LE(BigInt(r.game_count), i * 36 + 4);
     [r.avg_rank, r.idf, r.top1_rate].forEach((v, j) => statsBytes.writeDoubleLE(v ?? NaN, i * 36 + 12 + j * 8));
   }
-  const embeddings = bytes(new Float32Array([1, 0, 0, 1, 0.5, 0.5]));
+  const embeddings = bytes(new Float32Array(constraints ? modelTags.flatMap(t => {
+    const cosine = t.tag_id === 1 ? 1 : t.tag_id === 5 ? -0.8 : t.tag_id === 239 ? -0.9
+      : t.tag_id >= 100 ? 0.8 - (t.tag_id - 100) / 1000 : 0.5;
+    return [cosine, Math.sqrt(1 - cosine * cosine)];
+  }) : [1, 0, 0, 1, 0.5, 0.5]));
   const centroidBytes = Buffer.concat(modelTags.map((t, i) => {
     const id = Buffer.alloc(4); id.writeUInt32LE(t.tag_id);
     return Buffer.concat([id, embeddings.subarray(i * 8, i * 8 + 8)]);
   }));
   const row = {
-    model_name: MODEL, set_id: 'gte-base-test', created_at: '2026-11-01',
+    model_name: MODEL, set_id: constraints ? 'gte-base-constraints-test' : 'gte-base-test', created_at: '2026-11-01',
     centroids_sha256: hash(centroidBytes), tag_stats_sha256: hash(statsBytes),
     ranker_sha256: 'a'.repeat(64), vectors_sha256: 'b'.repeat(64), encoder_sha256: 'c'.repeat(64),
     encoder_probe: JSON.stringify({ text: 'probe', embedding: [1, 0] }), notes: null,
   };
-  const model = file(`sets/${row.set_id}`, api.encodePack({
+  if (constraints) {
+    // Valid v2 matched-set blob: 2D identity projection, one tagged game.
+    const vectors = Buffer.alloc(118);
+    vectors.write('GVEC'); vectors.writeUInt32LE(2, 4); vectors.writeUInt32LE(1, 8);
+    vectors.writeUInt32LE(2, 12); vectors.writeUInt32LE(2, 16); vectors.writeFloatLE(127, 20);
+    vectors.write(row.set_id, 24); vectors.writeFloatLE(1, 96); vectors.writeFloatLE(1, 108);
+    vectors.writeUInt32LE(20, 112); vectors[116] = 126;
+    row.vectors_sha256 = hash(vectors);
+    files.set(client.gameVectorsUrl(MODEL, row.set_id), vectors);
+  }
+  const model = file(`sets/${row.set_id}`, client.encodePack({
     kind: 'model', model: MODEL, setId: row.set_id, stats,
     centroids: modelTags.map((t, i) => ({ tagId: t.tag_id, offset: i * 8, length: 8 })),
   }, { embeddings }));
@@ -108,13 +135,16 @@ function fixture() {
     release_date: '2024-01-01', price_usd: 999, developer: null, publisher: null,
   }));
   const details = Array.from({ length: 256 }, (_, bucket) => file('details',
-    Buffer.from(JSON.stringify(apps.filter(a => api.detailBucket(a.appid) === bucket)))));
+    Buffer.from(JSON.stringify(apps.filter(a => client.detailBucket(a.appid) === bucket)))));
   const manifest = { version: 1, core, models: { [MODEL]: { row, file: model } }, details };
   return { files, manifest, apps };
 }
 
-async function environment(run) {
-  const f = fixture(), originalFetch = globalThis.fetch, originalCaches = Object.getOwnPropertyDescriptor(globalThis, 'caches');
+async function environment(run, options) {
+  // A new population gets its own module, as on a fresh page load; the engine
+  // intentionally memoizes a model's centroids for the lifetime of a page.
+  const client = options?.constraints ? await import(`${moduleUrl}#constraints`) : api;
+  const f = fixture(client, options), originalFetch = globalThis.fetch, originalCaches = Object.getOwnPropertyDescriptor(globalThis, 'caches');
   const entries = new Map(), requests = [];
   const storage = {
     async match(url) { return entries.get(url)?.clone(); },
@@ -129,10 +159,10 @@ async function environment(run) {
     return body ? new Response(body, { headers: { 'Content-Length': String(body.length) } }) : new Response('', { status: 404 });
   };
   globalThis.fetch = network;
-  Object.defineProperty(globalThis, 'caches', { configurable: true, value: { open: async () => storage } });
-  try { await run({ ...f, requests, entries, network }); }
+  Object.defineProperty(globalThis, 'caches', { configurable: true, value: { open: async () => storage, has: async () => false } });
+  try { await run({ ...f, api: client, requests, entries, network }); }
   finally {
-    api.setInferenceStore(null); globalThis.fetch = originalFetch;
+    client.setInferenceStore(null); globalThis.fetch = originalFetch;
     if (originalCaches) Object.defineProperty(globalThis, 'caches', originalCaches);
     else Reflect.deleteProperty(globalThis, 'caches');
   }
@@ -392,3 +422,58 @@ test('ready audits repair corrupt cache, reject damaged or invalid results and f
   globalThis.fetch = env.network;
   assert.deepEqual(await api.loadPrecomputedAudit(10, MODEL, url), saved);
 }));
+
+
+test('analyzer requirements and exclusions apply across retrieval, kNN, competitors and segments', () => environment(async ({ files, api }) => {
+  await api.loadInference(BASE + 'manifest.json');
+  await api.loadInferenceModel(MODEL);
+  files.set(BASE + 'ranker.json', Buffer.from(JSON.stringify({ trees: [{ v: 0 }], feature_names: [] })));
+  await api.loadRanker(BASE + 'ranker.json');
+  const run = extra => api.recommend({ description: 'A mysterious journey.', queryEmbedding: new Float32Array([1, 0]), ...extra }, undefined, MODEL);
+  const shown = out => [...out.primaryTags, ...out.secondaryTags];
+  const baseline = await run({});
+  assert.deepEqual(await run({ includedTagIds: [], excludedTagIds: [] }), baseline);
+  assert.equal(baseline.tagConstraints, undefined);
+  assert.ok(baseline.neighborEvidenceAvailable);
+  assert.ok(baseline.rankedTagIds.includes(5), 'kNN rescues Horror outside the centroid shortlist');
+  assert.ok(!baseline.rankedTagIds.includes(239));
+  assert.ok(baseline.avoidTags.some(t => t.tagId === 239));
+
+  const included = await run({ includedTagIds: [239, 239] });
+  assert.ok(shown(included).some(t => t.tagId === 239 && t.userSpecified));
+  assert.ok(!included.avoidTags.some(t => t.tagId === 239));
+  assert.equal(included.tagConstraints.included.length, 1);
+  assert.deepEqual(included, await run({ includedTagIds: [239] }), 'duplicates cannot amplify the bonus');
+  const compound = await run({ description: 'Online Co-Op.', includedTagIds: [7] });
+  assert.ok(shown(compound).some(t => t.tagId === 7 && t.userSpecified));
+  const negated = await run({ description: 'No multiplayer.', includedTagIds: [6] });
+  assert.ok(shown(negated).some(t => t.tagId === 6 && t.userSpecified));
+
+  const excluded = await run({
+    description: 'Multiplayer roguelike horror.', excludedTagIds: [1, 5, 6, 239],
+    competitors: [{ appid: 99, name: 'Competitor', source: 'live', tagIds: [5] }],
+  });
+  for (const id of [1, 5, 6, 239]) {
+    assert.ok(!excluded.rankedTagIds.includes(id));
+    assert.ok(![...shown(excluded), ...excluded.avoidTags].some(t => t.tagId === id));
+    assert.notEqual(excluded.segment?.main_tag_id, id);
+  }
+  assert.notEqual((await run({ appid: 10, excludedTagIds: [1] })).segment?.main_tag_id, 1);
+  const exact = await run({ description: 'Online Co-Op.', excludedTagIds: [7] });
+  assert.ok(exact.rankedTagIds.includes(8), 'related tags are not implicitly excluded');
+  const unsupported = await run({ includedTagIds: [4] });
+  assert.deepEqual(unsupported.rankedTagIds, baseline.rankedTagIds);
+  assert.equal(unsupported.tagConstraints.included[0].embeddingAvailable, false);
+  assert.ok(!shown(unsupported).some(t => t.tagId === 4), 'no invented score without a centroid');
+
+  for (const bad of [
+    { includedTagIds: [3] }, { excludedTagIds: [99999] }, { includedTagIds: [1.5] },
+    { includedTagIds: [0] }, { includedTagIds: [true] }, { excludedTagIds: null },
+    { includedTagIds: [1], excludedTagIds: [1] }, { mainTag: 'Roguelike', excludedTagIds: [1] },
+  ]) await assert.rejects(run(bad));
+  const all = await run({ excludedTagIds: api.getAllTags().map(t => t.tag_id) });
+  assert.deepEqual(all.rankedTagIds, []);
+  assert.deepEqual(shown(all), []);
+  assert.deepEqual(all.avoidTags, []);
+  assert.equal(all.segment, null);
+}, { constraints: true }));

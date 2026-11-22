@@ -49,6 +49,10 @@ export interface TagScore {
 
 export interface RecommendationInput {
   description: string;
+  /** Exact active tags stated by the author; independent of description wording. */
+  includedTagIds?: number[];
+  /** Exact active tags to omit from suggestions and segment selection. */
+  excludedTagIds?: number[];
   mainTag?: string;
   appid?: number;
   competitorAppids?: number[];
@@ -129,6 +133,8 @@ export interface TagRecommendation {
   successLift: number;
   confidence: number;
   explanation: string;
+  /** An author assertion, not independent model or Steam verification. */
+  userSpecified?: boolean;
   /**
    * Games behind the tag's lift: the segment's top performers (the top fifth
    * of each release-year cohort, as the offline pipeline picks them) that carry the
@@ -153,13 +159,18 @@ export interface SimilarGame {
 }
 
 export interface RecommendationOutput {
+  /** Present only for personalized analyzer requests; never used by saved audits. */
+  tagConstraints?: {
+    included: Array<{ tagId: number; tag: string; embeddingAvailable: boolean }>;
+    excluded: Array<{ tagId: number; tag: string }>;
+  };
   /** Which named competitors contributed tags, and which could not be loaded. */
   competitors?: CompetitorEvidence[];
   primaryTags: TagRecommendation[];
   secondaryTags: TagRecommendation[];
   avoidTags: TagRecommendation[];
   segment: Segment | null;
-  /** The segment came from the top-ranked candidate, not from the user or the game's own tags. */
+  /** The segment came from the top-ranked candidate (including optional author constraints), not a main-tag/App-ID pin. */
   segmentInferred: boolean;
   /** Set when analyzing an existing game by App ID. */
   analyzedApp?: { appid: number; name: string } | null;

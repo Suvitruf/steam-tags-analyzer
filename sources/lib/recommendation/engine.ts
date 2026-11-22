@@ -1,4 +1,5 @@
 import { normalizeIntentDescription, intentScore, suppressSubsumedIntents, INTENT_STATED } from './intent';
+import { resolveTagConstraints } from './constraints';
 import { competitorOverlap, localCompetitors, normalizeCompetitors } from './competitors';
 import type {
   CurrentTagSignal,
@@ -22,6 +23,7 @@ import {
   getAllTagEmbeddings,
   getTagStats,
   getTagsByIds,
+  getAllTags,
   type TagEmbedding,
   type TagStats,
 } from '../db/queries';
@@ -146,6 +148,12 @@ export async function recommend(
 
   const descNorm = normalizeIntentDescription(input.description);
   const descTokens = new Set(descNorm.split(' '));
+  const constraints = input.includedTagIds !== undefined || input.excludedTagIds !== undefined
+    ? resolveTagConstraints(input, getAllTags()) : { included: [], excluded: [] };
+  const includedIds = new Set(constraints.included.map(t => t.tag_id));
+  const excludedIds = new Set(constraints.excluded.map(t => t.tag_id));
+  const eligibleEmbeddings = excludedIds.size
+    ? allTagEmbeddings.filter(t => !excludedIds.has(t.tagId)) : allTagEmbeddings;
 
   // Tags whose full name appears verbatim in the description are force-included
   // as candidates even if semantic similarity would rank them below the
@@ -153,8 +161,8 @@ export async function recommend(
   // description. We require the whole phrase (not a shared word like "based"
   // from "turn-based") so we don't drag in every "X-Based" tag.
   const forcedTagIds = new Set(
-    allTagEmbeddings
-      .filter(t => intentScore(t.tagName, descNorm, descTokens) >= 1)
+    eligibleEmbeddings
+      .filter(t => includedIds.has(t.tagId) || intentScore(t.tagName, descNorm, descTokens) >= 1)
       .map(t => t.tagId)
   );
 
@@ -165,7 +173,7 @@ export async function recommend(
   const queryEmbedding = input.queryEmbedding ?? await embed(input.description);
   const candidates = await findSimilarTags(
     input.description,
-    allTagEmbeddings,
+    eligibleEmbeddings,
     TOP_K_CANDIDATES,
     forcedTagIds,
     queryEmbedding
@@ -174,7 +182,7 @@ export async function recommend(
 
   // The K-th candidate's similarity = this query's "relevance floor". A tag
   // below it wouldn't have been retrieved on merit — used by the avoid list.
-  const retrievalCutoff = candidates[Math.min(TOP_K_CANDIDATES, candidates.length) - 1].similarity;
+  const retrievalCutoff = candidates[Math.min(TOP_K_CANDIDATES, candidates.length) - 1]?.similarity ?? 1;
 
   // --- game-level kNN channel: nearest games vote for their tags, and become
   // the "similar games" output. Optional enrichment — any failure here leaves
@@ -247,7 +255,7 @@ export async function recommend(
     let added = 0;
     for (const [tagId, vote] of [...neighborVote.entries()].sort((a, b) => b[1] - a[1])) {
       if (added >= KNN_EXPAND_MAX) break;
-      if (vote < KNN_EXPAND_MIN || candidateIds.has(tagId)) continue;
+      if (vote < KNN_EXPAND_MIN || candidateIds.has(tagId) || excludedIds.has(tagId)) continue;
       const te = tagEmbById.get(tagId);
       if (!te) continue;
       candidates.push({ tagId, tagName: te.tagName, similarity: cosineSimilarity(queryEmbedding, te.embedding) });
@@ -305,7 +313,7 @@ export async function recommend(
 
     // Pin the segment to the page's leading tag (segment membership is a
     // top-5 tag, and the first tag is what players see first).
-    if (!segment && currentTagIds.length > 0) {
+    if (!segment && currentTagIds.length > 0 && !excludedIds.has(currentTagIds[0])) {
       const seg = findSegment(currentTagIds[0], input.priceBucket);
       if (seg) {
         segment = seg;
@@ -370,7 +378,10 @@ export async function recommend(
   // Keep the boost only on the most specific stated tags (see
   // suppressSubsumedIntents): "Dark"/"Fantasy" yield to "Dark Fantasy", etc.
   const effIntents = suppressSubsumedIntents(rawBase);
-  const base = rawBase.map((b, i) => ({ ...b, intent: effIntents[i] }));
+  // Explicit selections are independent assertions: a selected generic tag
+  // must not lose its support to a compound tag found in the description.
+  const base = rawBase.map((b, i) => ({ ...b, intent: includedIds.has(b.tagId) ? 1 : effIntents[i],
+    userSpecified: includedIds.has(b.tagId) }));
 
   // Score every candidate against a segment's tag scores (an empty map gives a
   // segment-agnostic score). The ranker captures relevance/specificity/segment
@@ -450,6 +461,7 @@ export async function recommend(
       successLift: c.features.success_lift,
       confidence: c.features.confidence,
       explanation,
+      ...(c.userSpecified ? { userSpecified: true } : {}),
       exemplarGames: [],
     };
     const hasScore = !!c.tagScore;
@@ -497,6 +509,7 @@ export async function recommend(
     const shown = new Set([...primary, ...secondary].map(r => r.tagId));
     const avoidCandidates: Array<{ ts: TagScore; shrunk: number; sim: number }> = [];
     for (const ts of tagScoresMap.values()) {
+      if (excludedIds.has(ts.tag_id) || includedIds.has(ts.tag_id)) continue;
       const shrunk = shrinkLift(ts.success_lift, ts.confidence);
       if (shrunk < AVOID_MIN_SHRUNK_LIFT || ts.sample_size < AVOID_MIN_SAMPLE) continue;
       if (shown.has(ts.tag_id)) continue;
@@ -532,6 +545,10 @@ export async function recommend(
   onProgress?.('Complete');
 
   return {
+    ...(includedIds.size || excludedIds.size ? { tagConstraints: {
+      included: constraints.included.map(t => ({ tagId: t.tag_id, tag: t.name, embeddingAvailable: tagEmbById.has(t.tag_id) })),
+      excluded: constraints.excluded.map(t => ({ tagId: t.tag_id, tag: t.name })),
+    } } : {}),
     competitors,
     primaryTags: primary,
     secondaryTags: secondary,
@@ -554,6 +571,7 @@ function generateExplanation(
     tagName: string;
     similarity: number;
     intent: number;
+    userSpecified: boolean;
     shrunkLift: number;
     features: FeatureVector;
     tagScore?: TagScore;
@@ -563,7 +581,9 @@ function generateExplanation(
 ): string {
   const parts: string[] = [];
 
-  if (c.intent >= INTENT_STATED) {
+  if (c.userSpecified) {
+    parts.push('you marked this as present in your game');
+  } else if (c.intent >= INTENT_STATED) {
     parts.push('a term you used to describe your game');
   }
 

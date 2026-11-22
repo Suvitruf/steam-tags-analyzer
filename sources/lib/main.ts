@@ -1,4 +1,4 @@
-import { getSegments, loadAppById, getAppTags, getRetiredTags } from './db/queries';
+import { getSegments, loadAppById, getAppTags, getRetiredTags, getAllTags } from './db/queries';
 import { recommend, type RecommendationProgressCallback } from './recommendation/engine';
 import { parseCompetitorAppids, resolveCompetitors } from './recommendation/competitors';
 import { listModels, DEFAULT_MODEL_KEY } from './llm/models';
@@ -6,6 +6,8 @@ import type { RecommendationInput, RecommendationOutput } from './types';
 import { ensureDatabase, ensureModel, type ModelProgress } from './runtime';
 import { $, escapeHtml, showMatchedSetWarning } from './ui/helpers';
 import { renderResultsHtml } from './ui/results';
+import { createTagChoices } from './ui/tag-choices';
+import { resolveTagConstraints } from './recommendation/constraints';
 import { ProgressBar, modelProgressHandler } from './ui/progress';
 import { initAuditPage } from './audit/ui';
 
@@ -29,6 +31,7 @@ const state: AppState = {
 
 // Mounted in #progress once buildUI() has rendered it.
 let progress = new ProgressBar(null);
+let tagChoices: ReturnType<typeof createTagChoices> | null = null;
 
 function setStatus(message: string, type: 'info' | 'error' | 'success' = 'info'): void {
   const el = $('#status');
@@ -162,8 +165,11 @@ async function handleAnalyze(): Promise<void> {
   const appidStr = ($('#appid') as HTMLInputElement)?.value?.trim();
   const competitorsStr = ($('#competitors') as HTMLInputElement)?.value?.trim();
   let competitorAppids: number[];
+  let choices: Pick<RecommendationInput, 'includedTagIds' | 'excludedTagIds'>;
   try {
     competitorAppids = parseCompetitorAppids(competitorsStr ?? '');
+    choices = tagChoices?.values() ?? {};
+    resolveTagConstraints({ ...choices, mainTag }, getAllTags());
   } catch (err) {
     setStatus((err as Error).message, 'error');
     return;
@@ -176,6 +182,7 @@ async function handleAnalyze(): Promise<void> {
 
   const input: RecommendationInput = {
     description,
+    ...choices,
     mainTag,
     appid,
     competitorAppids,
@@ -184,6 +191,7 @@ async function handleAnalyze(): Promise<void> {
   };
 
   state.analyzing = true;
+  tagChoices?.setDisabled(true);
   const btn = $('#analyze-btn') as HTMLButtonElement;
   if (btn) btn.disabled = true;
 
@@ -223,6 +231,7 @@ async function handleAnalyze(): Promise<void> {
     console.error(err);
   } finally {
     state.analyzing = false;
+    tagChoices?.setDisabled(false);
     if (btn) btn.disabled = false;
     progress.hide();
   }
@@ -251,6 +260,8 @@ function buildUI(): void {
         <label for="description">Game Description</label>
         <textarea id="description" rows="4" placeholder="Turn-based tactical roguelite with deckbuilding and dark fantasy setting"></textarea>
       </div>
+
+      <div id="tag-choices"></div>
 
       <div class="form-row">
         <div class="form-group">
@@ -310,6 +321,7 @@ async function init(): Promise<void> {
     warmModel(state.model);
 
     populateMainTagDropdown();
+    tagChoices = createTagChoices($('#tag-choices')!, getAllTags());
 
     // Deep link from the analytics pages: /analyzer?tag=Roguelike%20Deckbuilder
     // preselects the main tag.

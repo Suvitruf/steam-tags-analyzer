@@ -65,3 +65,21 @@ assert.match(renderResultsHtml({ ...output, competitors: [
   { appid: 30, name: 'Missing', tagIds: [], source: 'unavailable', issue: 'No tags' },
 ] }), /No competitor bonus was applied/);
 console.log('Analyzer render escaping checks passed.');
+
+const constrained = renderResultsHtml({ ...output,
+  primaryTags: [tag(PAYLOAD, { userSpecified: true })],
+  tagConstraints: {
+    included: [{ tagId: 7, tag: PAYLOAD, embeddingAvailable: false }],
+    excluded: [{ tagId: 8, tag: PAYLOAD }],
+  },
+});
+assert.doesNotMatch(constrained, /<img|onerror="/);
+assert.match(constrained, /specified by you/);
+assert.match(constrained, /Marked present by you/);
+assert.match(constrained, /Excluded by you/);
+assert.match(constrained, /Not ranked/);
+assert.match(constrained, /inferred from the description and your tag choices/);
+assert.doesNotMatch(html, /Marked present by you|Excluded by you/);
+assert.match(renderResultsHtml({ ...output, primaryTags: [], secondaryTags: [], rankedTagIds: [],
+  tagConstraints: { included: [], excluded: [{ tagId: 7, tag: 'All choices' }] },
+}), /No eligible tags remain after your exclusions/);
