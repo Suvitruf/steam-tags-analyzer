@@ -16,7 +16,10 @@
 
   <header class="site-header">
     <div class="wrapper">
-      <a class="site-title" href="{{ '/' | relative_url }}">{{ site.title }}</a>
+      <a class="site-title" href="{{ '/' | relative_url }}">
+        <svg class="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M4 5h12l12 12-11 11L4 15V5Z" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="11" r="2" fill="currentColor"/></svg>
+        <span>{{ site.title }}<small>Audience &amp; market research</small></span>
+      </a>
       {% include social-links.html %}
       {% include site-nav.html %}
     </div>

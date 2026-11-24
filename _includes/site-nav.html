@@ -1,19 +1,16 @@
+{% assign current_path = page.url | remove: '/index.html' | remove: '.html' | remove: '/' %}
 <nav class="site-nav" aria-label="Main navigation">
-  <a href="{{ '/analyzer' | relative_url }}">Analyzer</a>
-  <a href="{{ '/audit' | relative_url }}">Audit</a>
-  <a href="{{ '/benchmarks/' | relative_url }}">Benchmarks</a>
-  <a href="{{ '/publishers/' | relative_url }}">Publishers</a>
-  <a href="{{ '/compare/' | relative_url }}">Compare</a>
-  <a href="{{ '/lifecycle/' | relative_url }}">Lifecycle</a>
-  <a href="{{ '/upcoming/' | relative_url }}">Upcoming</a>
-  <a href="{{ '/momentum/' | relative_url }}">Momentum</a>
-  <a href="{{ '/tags/' | relative_url }}">Tags</a>
-  <a href="{{ '/combos/' | relative_url }}">Combos</a>
-  <a href="{{ '/trends/' | relative_url }}">Trends</a>
-  <a href="{{ '/trending/' | relative_url }}">Trending</a>
-  <a href="{{ '/features/' | relative_url }}">Features</a>
-  <a href="{{ '/prices/' | relative_url }}">Pricing</a>
-  <a href="{{ '/timing/' | relative_url }}">Timing</a>
-  <a href="{{ '/map/' | relative_url }}">Market Map</a>
-  <a href="{{ '/tag-changes/' | relative_url }}">Changelog</a>
+  <a href="{{ '/analyzer' | relative_url }}"{% if current_path == 'analyzer' %} aria-current="page"{% endif %}>Analyzer</a>
+  <a href="{{ '/audit' | relative_url }}"{% if current_path == 'audit' %} aria-current="page"{% endif %}>Tag Audit</a>
+  {% for group in site.data.navigation %}
+  <details class="nav-group" name="site-navigation">
+    <summary>{{ group.title }}</summary>
+    <div class="nav-menu">
+      {% for item in group.items %}
+      {% assign item_path = item.path | remove: '/' %}
+      <a href="{{ item.path | relative_url }}"{% if current_path == item_path %} aria-current="page"{% endif %}>{{ item.title }}</a>
+      {% endfor %}
+    </div>
+  </details>
+  {% endfor %}
 </nav>

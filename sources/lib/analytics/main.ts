@@ -1,4 +1,5 @@
 import { mountGameType } from './game-type';
+import { initSiteNavigation } from '../ui/site-navigation';
 // Analytics pages entry point. Included site-wide by the Jekyll layout, so it
 // dispatches on which container exists and no-ops elsewhere — it never loads
 // the analyzer's SQLite DB or models; everything comes from the small
@@ -19,6 +20,7 @@ import { initPublishers } from './publishers';
 import { mountReviewThreshold } from './review-threshold';
 
 function init(): void {
+  initSiteNavigation();
   const gameRoot = document.querySelector<HTMLElement>('[id$="-explorer"]:not(#coverage-explorer):not(#changelog-explorer), #market-map');
   if (!mountGameType(gameRoot)) return;
   const thresholdRoot=document.querySelector<HTMLElement>('#tag-explorer,#benchmark-explorer,#trend-explorer,#timing-explorer,#features-explorer,#prices-explorer,#combo-explorer,#market-map,#lifecycle-explorer');

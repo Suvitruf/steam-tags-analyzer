@@ -1,0 +1,81 @@
+[
+  {
+    "title": "Explore tags",
+    "items": [
+      {
+        "title": "Tag Explorer",
+        "path": "/tags/"
+      },
+      {
+        "title": "Tag Combos",
+        "path": "/combos/"
+      },
+      {
+        "title": "Tag Trends",
+        "path": "/trends/"
+      },
+      {
+        "title": "Tag Changelog",
+        "path": "/tag-changes/"
+      }
+    ]
+  },
+  {
+    "title": "Market research",
+    "items": [
+      {
+        "title": "Niche Benchmarks",
+        "path": "/benchmarks/"
+      },
+      {
+        "title": "Market Map",
+        "path": "/map/"
+      },
+      {
+        "title": "Store Features",
+        "path": "/features/"
+      },
+      {
+        "title": "Pricing",
+        "path": "/prices/"
+      },
+      {
+        "title": "Release Timing",
+        "path": "/timing/"
+      },
+      {
+        "title": "Data Coverage",
+        "path": "/coverage/"
+      }
+    ]
+  },
+  {
+    "title": "Games & releases",
+    "items": [
+      {
+        "title": "Compare Games",
+        "path": "/compare/"
+      },
+      {
+        "title": "Publisher Portfolios",
+        "path": "/publishers/"
+      },
+      {
+        "title": "Upcoming Releases",
+        "path": "/upcoming/"
+      },
+      {
+        "title": "Trending Now",
+        "path": "/trending/"
+      },
+      {
+        "title": "Validated Momentum",
+        "path": "/momentum/"
+      },
+      {
+        "title": "Review Lifecycle",
+        "path": "/lifecycle/"
+      }
+    ]
+  }
+]

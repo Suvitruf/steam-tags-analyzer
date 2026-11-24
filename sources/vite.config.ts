@@ -6,8 +6,9 @@ import { tagIdFromPath } from './lib/tag-route.mjs';
 const steamPromoPath = path.resolve(__dirname, '../_includes/steam-promo.html');
 const socialLinksPath = path.resolve(__dirname, '../_includes/social-links.html');
 const siteNavPath = path.resolve(__dirname, '../_includes/site-nav.html');
+const navigationPath = path.resolve(__dirname, '../_data/navigation.json');
 const faviconsPath = path.resolve(__dirname, '../_includes/favicons.html');
-const sharedIncludePaths = [steamPromoPath, socialLinksPath, siteNavPath, faviconsPath];
+const sharedIncludePaths = [steamPromoPath, socialLinksPath, siteNavPath, navigationPath, faviconsPath];
 
 function devFavicons(): string {
   // Vite serves assets/ at the root, while Jekyll includes the site prefix.
@@ -15,11 +16,16 @@ function devFavicons(): string {
 }
 
 function devNavigation(): string {
-  // Jekyll and Vite share the page list; only the development URLs differ.
-  return readFileSync(siteNavPath, 'utf8').replace(/\{\{\s*'([^']+)'\s*\|\s*relative_url\s*\}\}/g, (_match, route: string) => {
-    const page = route.replace(/^\/|\/$/g, '');
-    return page === 'analyzer' ? '/' : `/${page}.html`;
-  });
+  // The production Liquid template and the dev shell use the same page groups.
+  const groups: Array<{ title: string; items: Array<{ title: string; path: string }> }> =
+    JSON.parse(readFileSync(navigationPath, 'utf8'));
+  const escape = (value: string) => value.replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  const menus = groups.map(group => `<details class="nav-group" name="site-navigation">
+    <summary>${escape(group.title)}</summary><div class="nav-menu">${group.items.map(item =>
+      `<a href="/${escape(item.path.replace(/^\/|\/$/g, ''))}.html">${escape(item.title)}</a>`
+    ).join('')}</div></details>`).join('');
+  return `<nav class="site-nav" aria-label="Main navigation"><a href="/">Analyzer</a><a href="/audit.html">Tag Audit</a>${menus}</nav>`;
 }
 
 export default defineConfig(({ command }) => ({
@@ -47,8 +53,8 @@ export default defineConfig(({ command }) => ({
     },
   }],
   // Relative asset URLs, so emitted references (the embed-worker chunk, the
-  // sql.js wasm) resolve both at the custom domain root and under a Jekyll
-  // baseurl when the site is mounted at a subpath.
+  // sql.js wasm) resolve wherever the bundle is mounted — the Jekyll site
+  // serves it under baseurl /steam-tags, where absolute '/assets/...' 404s.
   base: './',
   // Dev server: serve ../assets at / so index.html's /css/style.css resolves
   // (nothing is copied in serve mode). Build: publicDir OFF — the heavy
@@ -56,7 +62,7 @@ export default defineConfig(({ command }) => ({
   // and copying ../assets used to duplicate ~450MB into the build output.
   publicDir: command === 'serve' ? path.resolve(__dirname, '../assets') : false,
   server: {
-    port: 3001,
+    port: 3000,
     // /mnt/* (Windows drives under WSL) emits no inotify events, so without
     // polling Vite serves stale transforms until the server is restarted.
     watch: { usePolling: true, interval: 300 },

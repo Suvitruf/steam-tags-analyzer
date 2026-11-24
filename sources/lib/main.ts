@@ -7,6 +7,7 @@ import { ensureDatabase, ensureModel, type ModelProgress } from './runtime';
 import { $, escapeHtml, showMatchedSetWarning } from './ui/helpers';
 import { renderResultsHtml } from './ui/results';
 import { createTagChoices } from './ui/tag-choices';
+import { initSiteNavigation } from './ui/site-navigation';
 import { resolveTagConstraints } from './recommendation/constraints';
 import { ProgressBar, modelProgressHandler } from './ui/progress';
 import { initAuditPage } from './audit/ui';
@@ -292,6 +293,7 @@ function buildUI(): void {
 }
 
 async function init(): Promise<void> {
+  initSiteNavigation();
   // This bundle is included site-wide by the Jekyll layout; only the analyzer
   // and the tag audit pages have a container. Bail out early everywhere else
   // or every page would download the full SQLite DB.

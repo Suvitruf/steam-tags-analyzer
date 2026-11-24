@@ -4,11 +4,28 @@ title: Steam Tag Analyzer
 permalink: /
 ---
 
-# Steam Tag Analyzer
+<section class="home-hero">
+  <div>
+    <p class="home-eyebrow">Tags · Audiences · Market research</p>
+    <h1>Find your game's<br><span>Steam audience.</span></h1>
+    <p class="home-lead">Discover commercially useful <em>accurate</em> tags for your game, backed by similar games and the audiences they reach.</p>
+    <div class="home-actions">
+      <a class="btn-analyze" href="{{ '/analyzer' | relative_url }}">Analyze your game &rarr;</a>
+      <a class="btn-secondary" href="{{ '/audit' | relative_url }}">Audit a Steam page</a>
+    </div>
+    <p class="home-sub">Runs in your browser. No account required.</p>
+  </div>
+  <aside class="home-how" aria-label="How it works">
+    <h2>From game idea to store page</h2>
+    <ol>
+      <li><strong>Describe your game</strong>Start with its mechanics, themes and what makes it different.</li>
+      <li><strong>Find accurate tags</strong>See identity tags, useful adjacent tags and misleading promises to avoid.</li>
+      <li><strong>Explore the evidence</strong>Check similar games, tag combinations and market benchmarks.</li>
+    </ol>
+  </aside>
+</section>
 
-<p class="home-lead">We don't tell you popular tags. We tell you the most commercially useful <em>accurate</em> tags for your game's Steam audience — backed by data from 170,000+ Steam games, with the sample sizes to prove it.</p>
-
-<p class="home-sub">Every number here is relative and review-based. No revenue estimates, no vanity metrics.</p>
+<h2 class="home-section-title">Explore the market</h2>
 
 <div class="home-tools">
   <a class="home-tool" href="{{ '/publishers/' | relative_url }}">

@@ -1,4 +1,54 @@
-const CSS = `:host{display:block;clear:both;margin:12px 0;color:#dce8f1;font:14px/1.5 Arial,sans-serif;max-width:100%}*{box-sizing:border-box}details{background:#182b3b;border:1px solid #456279;border-radius:5px;padding:10px}summary{cursor:pointer;color:#9ed8ff;font-weight:bold}button,select,input{font:inherit;color:#eef5fa;background:#28485d;border:1px solid #6d8b9e;border-radius:3px;padding:5px;margin:3px;max-width:100%}button,a{cursor:pointer}button:disabled{opacity:.5;cursor:wait}a{color:#a6d9ff}p{margin:9px 0}.controls{display:flex;flex-wrap:wrap;align-items:end;gap:6px}label{display:flex;flex-direction:column}.scroll{overflow:auto;max-width:100%}table{border-collapse:collapse;min-width:100%;text-align:left}th,td{padding:6px;border-bottom:1px solid #3d5669;vertical-align:top;white-space:normal;min-width:85px}th{color:#a6d9ff}.note{color:#b2c2cf;font-size:12px}.stats{display:flex;flex-wrap:wrap;gap:12px}.stat{flex:1 1 130px;background:#203b4e;padding:8px}.stat strong{display:block;font-size:20px}ul{padding-left:20px}h3{font-size:15px;margin:14px 0 6px}button:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid #fff;outline-offset:2px}`;
+// Isolated shadow-root styles: Steam page controls keep their own styling.
+const CONTROLS = `
+:host {
+  display: block; clear: both; margin: 12px 0; max-width: 100%; min-width: 0;
+  color-scheme: dark; color: #c7d5e0; font: 13px/1.5 "Motiva Sans", Arial, sans-serif;
+  --sta-panel: #16202d; --sta-border: #354b60; --sta-muted: #a8b6c4; --sta-accent: #66c0f4;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+button, select, input { font: inherit; color: #e5e9ed; border: 1px solid var(--sta-border); border-radius: 2px; padding: 7px 10px; max-width: 100%; min-width: 0; }
+select, input { background: #101822; }
+button { background: #28465d; cursor: pointer; }
+button:hover:not(:disabled) { background: #3c6684; color: #fff; }
+button:disabled { opacity: .5; cursor: wait; }
+button, a { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+a { color: var(--sta-accent); text-decoration: none; text-underline-offset: 3px; }
+a:hover { color: #fff; text-decoration: underline; }
+button:focus-visible, summary:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--sta-accent); outline-offset: 3px; }
+input[type=checkbox] { accent-color: var(--sta-accent); }
+`;
+export const COMPARISON_CSS = `${CONTROLS}
+:host { margin: 6px 0; }
+button { padding: 5px 10px; font-size: 12px; }
+span { color: var(--sta-muted); font-size: 12px; margin-left: 8px; }
+`;
+const CSS = `${CONTROLS}
+:host > details { background: var(--sta-panel); border: 1px solid #2e465b; border-radius: 2px; padding: 0 14px 12px; box-shadow: 0 2px 5px #0002; overflow-wrap: anywhere; }
+:host > details:not([open]) { padding-bottom: 0; }
+summary { cursor: pointer; color: var(--sta-accent); font-weight: 500; padding: 11px 14px; margin: 0 -14px; background: linear-gradient(100deg, #29485f, #1c3449); }
+summary:hover { background: #335c78; color: #fff; }
+details[open] > summary { border-bottom: 1px solid var(--sta-border); }
+p { margin: 10px 0; }
+p:empty { display: none; }
+.controls { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin: 12px 0; }
+label { display: flex; flex-direction: column; gap: 5px; max-width: 100%; color: var(--sta-muted); font-size: 12px; }
+label select, label input { color: #e5e9ed; font-size: 13px; }
+.scroll { overflow: auto; max-width: 100%; margin: 12px 0; scrollbar-color: #48647c var(--sta-panel); }
+table { border-collapse: collapse; width: 100%; text-align: left; font-size: 12px; }
+th, td { padding: 9px 10px; border-bottom: 1px solid #2b4052; vertical-align: top; white-space: normal; min-width: 80px; font-variant-numeric: tabular-nums; }
+th { color: var(--sta-muted); font-weight: 400; background: #101a25; }
+tbody tr:nth-child(odd) { background: #1b2c3c; }
+tbody tr:hover { background: #263e52; }
+.note { color: var(--sta-muted); font-size: 12px; }
+.stats { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.stat { flex: 1 1 130px; background: #1e3346; border-top: 2px solid #3a6887; padding: 12px; color: var(--sta-muted); font-size: 12px; }
+.stat strong { display: block; font-size: 22px; font-weight: 400; color: #f2f5f7; }
+ul { padding-left: 20px; }
+li { margin: 5px 0; }
+h3 { font-size: 12px; font-weight: 500; color: #f2f5f7; letter-spacing: .06em; text-transform: uppercase; margin: 18px 0 8px; padding-bottom: 7px; border-bottom: 1px solid var(--sta-border); }
+@media (max-width: 480px) { .controls > label { flex: 1 1 140px; } .controls > button { flex-grow: 1; } }
+`;
 export function el(tag, text, parent, className) {
   const node = document.createElement(tag);
   if (text !== undefined && text !== null) node.textContent = String(text);

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Steam Tag Analyzer — Audit
 // @namespace    https://steam-tags-analyzer.apanasik.com/
-// @version      0.3.6
+// @version      0.3.7
 // @description  Audit tags and research games, niches, publishers and upcoming releases on Steam.
 // @author       Apanasik
 // @homepageURL  https://steam-tags-analyzer.apanasik.com/
@@ -51,7 +51,243 @@
   }
 
   // src/shared/panel.css
-  var panel_default = "/* Synced from extension/src/panel.css. Update with npm run sync:shared. */\n:host {\n  display: block;\n  width: 100%;\n  margin: 12px 0;\n  color-scheme: dark;\n  text-align: left;\n}\n* {\n  box-sizing: border-box;\n}\n.wrap {\n  color: #e4edf6;\n  font:\n    13px/1.5 Arial,\n    sans-serif;\n  overflow-wrap: anywhere;\n}\nbutton,\na {\n  -webkit-tap-highlight-color: transparent;\n}\nbutton {\n  font: inherit;\n  cursor: pointer;\n  color: #e4edf6;\n  border: 1px solid #526577;\n  border-radius: 5px;\n  background: #20384c;\n  padding: 7px 10px;\n}\nbutton:hover {\n  background: #2c4a63;\n}\nbutton:disabled {\n  cursor: wait;\n  opacity: 0.65;\n}\nbutton:focus-visible,\na:focus-visible,\nsummary:focus-visible {\n  outline: 2px solid #80ccff;\n  outline-offset: 3px;\n}\n.launch {\n  width: 100%;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  text-align: left;\n  gap: 8px;\n}\n.brand {\n  font-size: 11px;\n  color: #bdcddd;\n}\n.panel {\n  display: flex;\n  flex-direction: column;\n  max-height: min(720px, 80vh);\n  margin-top: 8px;\n  padding: 14px;\n  background: #152331;\n  border: 1px solid #526577;\n  border-radius: 7px;\n  box-shadow: 0 4px 16px #0003;\n}\n.panel > * {\n  flex-shrink: 0;\n}\n.panel > .body {\n  flex-shrink: 1;\n  min-height: 0;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  scrollbar-width: thin;\n  padding-right: 4px;\n}\n[hidden] {\n  display: none !important;\n}\n.header {\n  display: flex;\n  align-items: start;\n  justify-content: space-between;\n  gap: 10px;\n}\nh2 {\n  font-size: 16px;\n  margin: 0;\n  color: #fff;\n}\nh3 {\n  margin: 15px 0 7px;\n  font-size: 13px;\n  color: #fff;\n}\np {\n  margin: 8px 0;\n}\na {\n  color: #92d5ff;\n  text-decoration: underline;\n  text-underline-offset: 2px;\n}\na:hover {\n  color: #d2efff;\n}\n.close {\n  padding: 0 7px;\n  font-size: 20px;\n  line-height: 1.3;\n  background: transparent;\n}\n.meta {\n  color: #b9cad9;\n  font-size: 12px;\n}\n.notice {\n  padding: 9px;\n  border-left: 3px solid #e3b96d;\n  background: #263343;\n}\n.tags {\n  padding: 0;\n  margin: 0;\n  list-style: none;\n}\n.tags li {\n  border-bottom: 1px solid #344757;\n  padding: 7px 0;\n}\nsummary {\n  cursor: pointer;\n}\n.tag-name {\n  font-weight: 600;\n}\n.rank {\n  font-size: 11px;\n  color: #b9cad9;\n  margin-right: 5px;\n}\n.badge {\n  display: inline-block;\n  font-size: 10px;\n  padding: 1px 5px;\n  margin-left: 5px;\n  border: 1px solid #718497;\n  border-radius: 3px;\n  color: #dce7f0;\n}\n.identity,\n.feature {\n  border-color: #6cbfa7;\n  color: #9ee2c9;\n}\n.suspicious,\n.retired {\n  border-color: #e3b96d;\n  color: #f7d99e;\n}\n.weak,\n.unassessed {\n  border-color: #98afc5;\n  color: #c9d9ea;\n}\n.reason {\n  margin: 6px 0 0;\n  color: #c3d2df;\n  font-size: 12px;\n}\n.links {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px 14px;\n  margin-top: 12px;\n  padding-top: 10px;\n  border-top: 1px solid #344757;\n}\n.retry {\n  margin-top: 8px;\n}\n.local-controls { margin: 8px 0; }\n.local-controls .notice { font-size: 12px; margin: 0 0 8px; }\n.download-info { margin-bottom: 8px; }\n.download-info summary { color: #b9cad9; font-size: 12px; }\n.cancel-local { margin-left: 8px; }\n.suggestions {\n  padding-left: 18px;\n  margin: 6px 0;\n}\n.suggestions li {\n  margin-bottom: 7px;\n}\n";
+  var panel_default = `/* Synced from extension/src/panel.css. Update with npm run sync:shared. */
+:host {
+  display: block;
+  width: 100%;
+  margin: 12px 0;
+  color-scheme: dark;
+  --sta-bg: #1b2838;
+  --sta-panel: #16202d;
+  --sta-raised: #2a475e;
+  --sta-border: #354b60;
+  --sta-text: #c7d5e0;
+  --sta-muted: #a8b6c4;
+  --sta-accent: #66c0f4;
+  text-align: left;
+}
+* {
+  box-sizing: border-box;
+}
+.wrap {
+  color: var(--sta-text);
+  font:
+    13px/1.5 "Motiva Sans", Arial,
+    sans-serif;
+  overflow-wrap: anywhere;
+}
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+  color: var(--sta-text);
+  border: 1px solid var(--sta-border);
+  border-radius: 2px;
+  background: #28465d;
+  padding: 7px 10px;
+}
+button:hover {
+  background: #3c6684;
+  color: #fff;
+}
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--sta-accent);
+  outline-offset: 3px;
+}
+.launch {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  gap: 8px;
+}
+.brand {
+  font-size: 11px;
+  color: var(--sta-muted);
+}
+.panel {
+  display: flex;
+  flex-direction: column;
+  max-height: min(720px, 80vh);
+  margin-top: 8px;
+  padding: 14px;
+  background: var(--sta-panel);
+  border: 1px solid var(--sta-border);
+  border-radius: 3px;
+  box-shadow: 0 4px 16px #0003;
+}
+.panel > * {
+  flex-shrink: 0;
+}
+.panel > .body {
+  flex-shrink: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  padding-right: 4px;
+}
+[hidden] {
+  display: none !important;
+}
+.header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+}
+h2 {
+  font-size: 16px;
+  margin: 0;
+  color: #fff;
+}
+h3 {
+  margin: 15px 0 7px;
+  font-size: 13px;
+  color: #fff;
+}
+p {
+  margin: 8px 0;
+}
+a {
+  color: var(--sta-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+a:hover {
+  color: #fff;
+}
+.close {
+  padding: 0 7px;
+  font-size: 20px;
+  line-height: 1.3;
+  background: transparent;
+}
+.meta {
+  color: var(--sta-muted);
+  font-size: 12px;
+}
+.notice {
+  padding: 9px;
+  border-left: 2px solid #e6bf83;
+  background: #30342f;
+}
+.tags {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.tags li {
+  border-bottom: 1px solid var(--sta-border);
+  padding: 7px 0;
+}
+summary {
+  cursor: pointer;
+}
+.tag-name {
+  font-weight: 600;
+}
+.rank {
+  font-size: 11px;
+  color: var(--sta-muted);
+  margin-right: 5px;
+}
+.badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 1px 5px;
+  margin-left: 5px;
+  border: 1px solid var(--sta-border);
+  border-radius: 3px;
+  color: var(--sta-text);
+}
+.identity,
+.feature {
+  border-color: #47613b;
+  background: #2b3d2d;
+  color: #b8d989;
+}
+.suspicious,
+.retired {
+  border-color: #75533c;
+  background: #433b2b;
+  color: #e6bf83;
+}
+.weak,
+.unassessed {
+  border-color: var(--sta-border);
+  color: var(--sta-text);
+}
+.reason {
+  margin: 6px 0 0;
+  color: var(--sta-text);
+  font-size: 12px;
+}
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--sta-border);
+}
+.retry {
+  margin-top: 8px;
+}
+.local-controls { margin: 8px 0; }
+.local-controls .notice { font-size: 12px; margin: 0 0 8px; }
+.download-info { margin-bottom: 8px; }
+.download-info summary { color: var(--sta-muted); font-size: 12px; }
+.cancel-local { margin-left: 8px; }
+.suggestions {
+  padding-left: 18px;
+  margin: 6px 0;
+}
+.suggestions li {
+  margin-bottom: 7px;
+}
+
+/* Store-style section headers and compact actions fit Steam's narrow sidebar. */
+.launch {
+  padding: 10px 12px;
+  background: linear-gradient(100deg, #29485f, #1c3449);
+  border-color: #3b5e76;
+  border-radius: 2px;
+}
+.launch:hover, .launch[aria-expanded="true"] { background: #335c78; }
+.launch > span:first-child { color: var(--sta-accent); }
+.launch:hover > span, .launch[aria-expanded="true"] > span { color: #fff; }
+.brand { letter-spacing: .02em; }
+.header { padding-bottom: 10px; border-bottom: 1px solid var(--sta-border); }
+h2 { font-weight: 500; }
+h3 { font-size: 12px; font-weight: 500; letter-spacing: .07em; text-transform: uppercase; border-bottom: 1px solid var(--sta-border); padding-bottom: 6px; }
+.tags li:last-child { border: 0; }
+.tags details[open] { background: #1b2c3c; margin: -3px -6px; padding: 3px 6px; }
+.tags summary { padding: 3px 0; }
+.tag-name { color: #e5e9ed; }
+.feature { color: var(--sta-accent); background: #233e53; border-color: #3c6380; }
+.suspicious, .retired { color: #ef9a87; background: #472e30; border-color: #795250; }
+.run-local { color: #fff; background: linear-gradient(100deg, #2379ad, #176298); border-color: #4b91bc; }
+.run-local:hover { background: #318cc1; }
+.close { border-color: transparent; color: var(--sta-muted); }
+.close:hover { background: #2a475e; }
+:host { scrollbar-color: #48647c #16202d; }
+@media (max-width: 480px) {
+  .launch { flex-wrap: wrap; gap: 2px 8px; }
+  .panel { padding: 12px; max-height: 85vh; }
+  .links { gap: 10px; }
+}
+`;
 
   // src/shared/panel.js
   var LABELS = {
@@ -10922,7 +11158,56 @@ If a question does not make any sense, or is not factually coherent, explain why
   }
 
   // src/research/ui.js
-  var CSS = `:host{display:block;clear:both;margin:12px 0;color:#dce8f1;font:14px/1.5 Arial,sans-serif;max-width:100%}*{box-sizing:border-box}details{background:#182b3b;border:1px solid #456279;border-radius:5px;padding:10px}summary{cursor:pointer;color:#9ed8ff;font-weight:bold}button,select,input{font:inherit;color:#eef5fa;background:#28485d;border:1px solid #6d8b9e;border-radius:3px;padding:5px;margin:3px;max-width:100%}button,a{cursor:pointer}button:disabled{opacity:.5;cursor:wait}a{color:#a6d9ff}p{margin:9px 0}.controls{display:flex;flex-wrap:wrap;align-items:end;gap:6px}label{display:flex;flex-direction:column}.scroll{overflow:auto;max-width:100%}table{border-collapse:collapse;min-width:100%;text-align:left}th,td{padding:6px;border-bottom:1px solid #3d5669;vertical-align:top;white-space:normal;min-width:85px}th{color:#a6d9ff}.note{color:#b2c2cf;font-size:12px}.stats{display:flex;flex-wrap:wrap;gap:12px}.stat{flex:1 1 130px;background:#203b4e;padding:8px}.stat strong{display:block;font-size:20px}ul{padding-left:20px}h3{font-size:15px;margin:14px 0 6px}button:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid #fff;outline-offset:2px}`;
+  var CONTROLS = `
+:host {
+  display: block; clear: both; margin: 12px 0; max-width: 100%; min-width: 0;
+  color-scheme: dark; color: #c7d5e0; font: 13px/1.5 "Motiva Sans", Arial, sans-serif;
+  --sta-panel: #16202d; --sta-border: #354b60; --sta-muted: #a8b6c4; --sta-accent: #66c0f4;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+button, select, input { font: inherit; color: #e5e9ed; border: 1px solid var(--sta-border); border-radius: 2px; padding: 7px 10px; max-width: 100%; min-width: 0; }
+select, input { background: #101822; }
+button { background: #28465d; cursor: pointer; }
+button:hover:not(:disabled) { background: #3c6684; color: #fff; }
+button:disabled { opacity: .5; cursor: wait; }
+button, a { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+a { color: var(--sta-accent); text-decoration: none; text-underline-offset: 3px; }
+a:hover { color: #fff; text-decoration: underline; }
+button:focus-visible, summary:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--sta-accent); outline-offset: 3px; }
+input[type=checkbox] { accent-color: var(--sta-accent); }
+`;
+  var COMPARISON_CSS = `${CONTROLS}
+:host { margin: 6px 0; }
+button { padding: 5px 10px; font-size: 12px; }
+span { color: var(--sta-muted); font-size: 12px; margin-left: 8px; }
+`;
+  var CSS = `${CONTROLS}
+:host > details { background: var(--sta-panel); border: 1px solid #2e465b; border-radius: 2px; padding: 0 14px 12px; box-shadow: 0 2px 5px #0002; overflow-wrap: anywhere; }
+:host > details:not([open]) { padding-bottom: 0; }
+summary { cursor: pointer; color: var(--sta-accent); font-weight: 500; padding: 11px 14px; margin: 0 -14px; background: linear-gradient(100deg, #29485f, #1c3449); }
+summary:hover { background: #335c78; color: #fff; }
+details[open] > summary { border-bottom: 1px solid var(--sta-border); }
+p { margin: 10px 0; }
+p:empty { display: none; }
+.controls { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin: 12px 0; }
+label { display: flex; flex-direction: column; gap: 5px; max-width: 100%; color: var(--sta-muted); font-size: 12px; }
+label select, label input { color: #e5e9ed; font-size: 13px; }
+.scroll { overflow: auto; max-width: 100%; margin: 12px 0; scrollbar-color: #48647c var(--sta-panel); }
+table { border-collapse: collapse; width: 100%; text-align: left; font-size: 12px; }
+th, td { padding: 9px 10px; border-bottom: 1px solid #2b4052; vertical-align: top; white-space: normal; min-width: 80px; font-variant-numeric: tabular-nums; }
+th { color: var(--sta-muted); font-weight: 400; background: #101a25; }
+tbody tr:nth-child(odd) { background: #1b2c3c; }
+tbody tr:hover { background: #263e52; }
+.note { color: var(--sta-muted); font-size: 12px; }
+.stats { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.stat { flex: 1 1 130px; background: #1e3346; border-top: 2px solid #3a6887; padding: 12px; color: var(--sta-muted); font-size: 12px; }
+.stat strong { display: block; font-size: 22px; font-weight: 400; color: #f2f5f7; }
+ul { padding-left: 20px; }
+li { margin: 5px 0; }
+h3 { font-size: 12px; font-weight: 500; color: #f2f5f7; letter-spacing: .06em; text-transform: uppercase; margin: 18px 0 8px; padding-bottom: 7px; border-bottom: 1px solid var(--sta-border); }
+@media (max-width: 480px) { .controls > label { flex: 1 1 140px; } .controls > button { flex-grow: 1; } }
+`;
   function el2(tag, text, parent, className) {
     const node = document.createElement(tag);
     if (text !== void 0 && text !== null) node.textContent = String(text);
@@ -11388,7 +11673,7 @@ If a question does not make any sense, or is not factually coherent, explain why
       const host = el2("div");
       anchor.insertAdjacentElement("afterend", host);
       const root = host.attachShadow({ mode: "open" });
-      el2("style", ":host{display:block;margin:4px 0}button{background:#28485d;color:#dce8f1;border:1px solid #6d8b9e;border-radius:3px;padding:5px;cursor:pointer}span{color:#ddd;font:12px Arial}", root);
+      el2("style", COMPARISON_CSS, root);
       const b = el2("button", "Add to comparison", root), status = el2("span", "", root);
       status.setAttribute("role", "status");
       b.title = `Compare Steam App ${id2}`;

@@ -1,6 +1,6 @@
 {
   "name": "steam-tag-audit-userscript",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "private": true,
   "type": "module",
   "description": "Steam tag audits and market research panels for Tampermonkey and Violentmonkey.",

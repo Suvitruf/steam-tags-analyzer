@@ -1,5 +1,5 @@
 import { loadApps, price } from './apps.js';
-import { el, lazyPanel, table, number, percent, gameLink, action, link } from './ui.js';
+import { el, lazyPanel, table, number, percent, gameLink, action, link, COMPARISON_CSS } from './ui.js';
 import { createSelection } from './selection.js';
 import { steamAppId } from '../shared/links.js';
 
@@ -16,7 +16,7 @@ export function comparison(gm, client) {
     anchor.dataset.staCompare='true';
     const host=el('div');anchor.insertAdjacentElement('afterend',host);
     const root=host.attachShadow({mode:'open'});
-    el('style',':host{display:block;margin:4px 0}button{background:#28485d;color:#dce8f1;border:1px solid #6d8b9e;border-radius:3px;padding:5px;cursor:pointer}span{color:#ddd;font:12px Arial}',root);
+    el('style',COMPARISON_CSS,root);
     const b=el('button','Add to comparison',root),status=el('span','',root);status.setAttribute('role','status');
     b.title=`Compare Steam App ${id}`;
     if(!controls.has(id))controls.set(id,[]);controls.get(id).push(b);

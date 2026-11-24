@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Steam Tag Analyzer — Audit
 // @namespace    https://steam-tags-analyzer.apanasik.com/
-// @version      0.3.6
+// @version      0.3.7
 // @description  Audit tags and research games, niches, publishers and upcoming releases on Steam.
 // @author       Apanasik
 // @homepageURL  https://steam-tags-analyzer.apanasik.com/
