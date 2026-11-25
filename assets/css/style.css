@@ -53,6 +53,8 @@ body {
   width: 100%;
   height: 190px;
   border: 0;
+  /* Match Steam's document scheme so the iframe backdrop stays transparent. */
+  color-scheme: light;
 }
 
 .site-header {
